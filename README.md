@@ -1,5 +1,8 @@
 # jt-mcp-server
 
+[![CI](https://github.com/HoukasaurusRex/jt-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/HoukasaurusRex/jt-mcp-server/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@houkasaurusrex/jt-mcp-server)](https://www.npmjs.com/package/@houkasaurusrex/jt-mcp-server)
+
 Personal [Model Context Protocol](https://modelcontextprotocol.io) server that gives AI agents dev workflow tools — GitHub project management, conventional commits, static file serving, nvm-aware command execution, visual regression testing, and more.
 
 ## Quick Start
