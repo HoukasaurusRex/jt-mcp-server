@@ -1,6 +1,6 @@
 {
   "name": "@houkasaurusrex/jt-mcp-server",
-  "version": "0.0.0-development",
+  "version": "1.0.0",
   "description": "Personal MCP server with dev workflow tools for AI agents",
   "type": "module",
   "main": "dist/index.js",
