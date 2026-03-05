@@ -13,8 +13,8 @@ import { register as registerGit } from "./tools/git.js";
 import { register as registerNetlify } from "./tools/netlify.js";
 
 const server = new McpServer({
-  name: "jt-mcp-server",
-  version: "0.1.0",
+  name: "@houkasaurusrex/jt-mcp-server",
+  version: "0.0.0",
 });
 
 registerDevPort(server);
