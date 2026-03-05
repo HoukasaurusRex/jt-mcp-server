@@ -1,0 +1,12 @@
+src/
+.yarn/
+.github/
+.env
+*.tgz
+tsconfig.json
+.yarnrc.yml
+yarn.lock
+.gitignore
+AGENTS.md
+PLAN_PROMPT.md
+CLAUDE.md
