@@ -11,6 +11,8 @@ import { register as registerDevVisualRegression } from "./tools/dev-visual-regr
 import { register as registerGitHub } from "./tools/github.js";
 import { register as registerGit } from "./tools/git.js";
 import { register as registerNetlify } from "./tools/netlify.js";
+import { register as registerShell } from "./tools/shell.js";
+import { register as registerMemory } from "./tools/memory.js";
 
 const server = new McpServer({
   name: "@houkasaurusrex/jt-mcp-server",
@@ -25,6 +27,8 @@ registerDevVisualRegression(server);
 registerGitHub(server);
 registerGit(server);
 registerNetlify(server);
+registerShell(server);
+registerMemory(server);
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

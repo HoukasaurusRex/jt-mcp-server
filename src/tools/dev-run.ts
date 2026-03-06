@@ -4,15 +4,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
 import { DevRunSchema } from "../types.js";
+import { textResult, errorResult } from "../lib/tool-result.js";
 
 export function resolveNodeBinPath(version: string): string | null {
   const nvmDir = join(homedir(), ".nvm", "versions", "node");
 
-  // Try exact match first (e.g. "v20.11.0")
   const exactPath = join(nvmDir, version.startsWith("v") ? version : `v${version}`, "bin");
   if (existsSync(exactPath)) return exactPath;
 
-  // Try prefix match (e.g. "20" -> find "v20.x.y")
   try {
     const dirs = readdirSync(nvmDir);
     const prefix = version.startsWith("v") ? version : `v${version}`;
@@ -38,30 +37,21 @@ export function register(server: McpServer): void {
       description: "Run a shell command with optional nvm Node version, working directory, and environment variables. Enables corepack automatically when a Node version is specified.",
       inputSchema: DevRunSchema,
     },
-    async ({ command, node_version, cwd, env }) => {
+    async ({ command, node_version, cwd, env, timeout }) => {
       try {
         const execEnv: Record<string, string> = {
           ...(process.env as Record<string, string>),
           ...(env as Record<string, string> | undefined),
         };
 
-        // If a node version is requested, prepend the nvm bin to PATH
         if (node_version) {
           const binPath = resolveNodeBinPath(node_version);
           if (!binPath) {
-            return {
-              content: [
-                {
-                  type: "text" as const,
-                  text: `Node version ${node_version} not found in ~/.nvm/versions/node/`,
-                },
-              ],
-              isError: true,
-            };
+            return errorResult(
+              `Node version ${node_version} not found in ~/.nvm/versions/node/`
+            );
           }
           execEnv.PATH = `${binPath}:${execEnv.PATH ?? ""}`;
-
-          // Enable corepack so yarn/pnpm are available for the resolved Node version
           await execa("corepack", ["enable"], { env: execEnv, reject: false });
         }
 
@@ -69,7 +59,7 @@ export function register(server: McpServer): void {
           cwd: cwd ?? process.cwd(),
           env: execEnv,
           reject: false,
-          timeout: 300000, // 5 min default
+          timeout,
         });
 
         const output = [result.stdout, result.stderr]
@@ -77,26 +67,12 @@ export function register(server: McpServer): void {
           .join("\n");
 
         if (result.exitCode !== 0) {
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: `Exit code ${result.exitCode}\n${output}`,
-              },
-            ],
-            isError: true,
-          };
+          return errorResult(`Exit code ${result.exitCode}\n${output}`);
         }
 
-        return {
-          content: [{ type: "text" as const, text: output || "(no output)" }],
-        };
+        return textResult(output || "(no output)");
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text" as const, text: message }],
-          isError: true,
-        };
+        return errorResult(err instanceof Error ? err.message : String(err));
       }
     }
   );

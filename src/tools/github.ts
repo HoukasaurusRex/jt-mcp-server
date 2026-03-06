@@ -7,6 +7,7 @@ import {
   GitHubProjectCompleteIssueSchema,
   GitHubCreatePRSchema,
 } from "../types.js";
+import { textResult, errorResult } from "../lib/tool-result.js";
 
 function getGraphqlClient() {
   const token = process.env.GITHUB_TOKEN;
@@ -74,36 +75,25 @@ export function register(server: McpServer): void {
         );
 
         if (todoItems.length === 0) {
-          return {
-            content: [{ type: "text", text: "No Todo issues found in the project" }],
-          };
+          return textResult("No Todo issues found in the project");
         }
 
         const oldest = todoItems[0];
-        return {
-          content: [
+        return textResult(
+          JSON.stringify(
             {
-              type: "text",
-              text: JSON.stringify(
-                {
-                  item_id: oldest.id,
-                  title: oldest.content!.title,
-                  number: oldest.content!.number,
-                  url: oldest.content!.url,
-                  body: oldest.content!.body,
-                },
-                null,
-                2
-              ),
+              item_id: oldest.id,
+              title: oldest.content!.title,
+              number: oldest.content!.number,
+              url: oldest.content!.url,
+              body: oldest.content!.body,
             },
-          ],
-        };
+            null,
+            2
+          )
+        );
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: message }],
-          isError: true,
-        };
+        return errorResult(err instanceof Error ? err.message : String(err));
       }
     }
   );
@@ -133,20 +123,9 @@ export function register(server: McpServer): void {
           }
         );
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Updated item ${item_id} status to ${status_option_id}`,
-            },
-          ],
-        };
+        return textResult(`Updated item ${item_id} status to ${status_option_id}`);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: message }],
-          isError: true,
-        };
+        return errorResult(err instanceof Error ? err.message : String(err));
       }
     }
   );
@@ -180,20 +159,11 @@ export function register(server: McpServer): void {
           }
         );
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Closed issue #${issue_number} and set project item ${item_id} to Done`,
-            },
-          ],
-        };
+        return textResult(
+          `Closed issue #${issue_number} and set project item ${item_id} to Done`
+        );
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: message }],
-          isError: true,
-        };
+        return errorResult(err instanceof Error ? err.message : String(err));
       }
     }
   );
@@ -212,15 +182,9 @@ export function register(server: McpServer): void {
         if (draft) args.push("--draft");
 
         const result = await execa("gh", args);
-        return {
-          content: [{ type: "text", text: result.stdout }],
-        };
+        return textResult(result.stdout);
       } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: message }],
-          isError: true,
-        };
+        return errorResult(err instanceof Error ? err.message : String(err));
       }
     }
   );

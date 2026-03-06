@@ -1,8 +1,10 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { execa } from "execa";
 import { GitConventionalCommitSchema } from "../types.js";
+import { textResult, errorResult } from "../lib/tool-result.js";
 
-const CONVENTIONAL_RE = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+/;
+const STRICT_RE = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+/;
+const RELAXED_RE = /^\w+(\(.+\))?!?: .+/;
 
 const FORBIDDEN_PATTERNS = [".env", "node_modules", "credentials", ".secret"];
 
@@ -13,32 +15,22 @@ export function register(server: McpServer): void {
       description: "Stage files and create a conventional commit. Validates message format and blocks sensitive files.",
       inputSchema: GitConventionalCommitSchema,
     },
-    async ({ message, files }) => {
+    async ({ message, files, strict }) => {
       try {
-        if (!CONVENTIONAL_RE.test(message)) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `Invalid conventional commit message: "${message}". Must match <type>[scope]: <description>`,
-              },
-            ],
-            isError: true,
-          };
+        const re = strict ? STRICT_RE : RELAXED_RE;
+        if (!re.test(message)) {
+          const hint = strict
+            ? "Must match <type>[scope]: <description> where type is feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+            : "Must match <type>[scope]: <description>";
+          return errorResult(
+            `Invalid commit message: "${message}". ${hint}`
+          );
         }
 
         if (files && files.length > 0) {
           for (const file of files) {
             if (FORBIDDEN_PATTERNS.some((p) => file.includes(p))) {
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: `Refusing to stage forbidden file: ${file}`,
-                  },
-                ],
-                isError: true,
-              };
+              return errorResult(`Refusing to stage forbidden file: ${file}`);
             }
           }
           await execa("git", ["add", ...files]);
@@ -50,30 +42,14 @@ export function register(server: McpServer): void {
           "--name-only",
         ]);
         if (!staged.trim()) {
-          return {
-            content: [
-              { type: "text", text: "No files staged for commit" },
-            ],
-            isError: true,
-          };
+          return errorResult("No files staged for commit");
         }
 
         await execa("git", ["commit", "-m", message]);
 
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Committed: ${message}\nFiles: ${staged.trim()}`,
-            },
-          ],
-        };
+        return textResult(`Committed: ${message}\nFiles: ${staged.trim()}`);
       } catch (err) {
-        const message_ = err instanceof Error ? err.message : String(err);
-        return {
-          content: [{ type: "text", text: message_ }],
-          isError: true,
-        };
+        return errorResult(err instanceof Error ? err.message : String(err));
       }
     }
   );

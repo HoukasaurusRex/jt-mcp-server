@@ -28,15 +28,40 @@ describe("git", () => {
     );
   });
 
-  it("should reject invalid conventional commit messages", async () => {
+  it("should reject invalid conventional commit messages in strict mode", async () => {
     const { register } = await import("../tools/git.js");
     const mockServer = { registerTool: vi.fn() };
     register(mockServer as any);
 
     const handler = mockServer.registerTool.mock.calls[0][2];
-    const result = await handler({ message: "bad message format" });
+    const result = await handler({ message: "bad message format", strict: true });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("Invalid conventional commit");
+    expect(result.content[0].text).toContain("Invalid commit message");
+  });
+
+  it("should reject non-standard types in strict mode", async () => {
+    const { register } = await import("../tools/git.js");
+    const mockServer = { registerTool: vi.fn() };
+    register(mockServer as any);
+
+    const handler = mockServer.registerTool.mock.calls[0][2];
+    const result = await handler({ message: "add: something", strict: true });
+    expect(result.isError).toBe(true);
+  });
+
+  it("should accept non-standard types in relaxed mode", async () => {
+    const { register } = await import("../tools/git.js");
+    const mockServer = { registerTool: vi.fn() };
+    register(mockServer as any);
+
+    const handler = mockServer.registerTool.mock.calls[0][2];
+    mockExeca
+      .mockResolvedValueOnce({ stdout: "lib/.functions\n" } as any) // git diff --cached
+      .mockResolvedValueOnce({} as any); // git commit
+
+    const result = await handler({ message: "add: new shell function", strict: false });
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toContain("Committed");
   });
 
   it("should reject forbidden files", async () => {
@@ -48,6 +73,7 @@ describe("git", () => {
     const result = await handler({
       message: "feat: add feature",
       files: [".env"],
+      strict: true,
     });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain("forbidden");
@@ -67,6 +93,7 @@ describe("git", () => {
     const result = await handler({
       message: "feat: add new tool",
       files: ["src/index.ts"],
+      strict: true,
     });
     expect(result.isError).toBeUndefined();
     expect(result.content[0].text).toContain("Committed");

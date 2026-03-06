@@ -21,6 +21,12 @@ export type DevPortInput = z.infer<typeof DevPortSchema>;
 export const DevServeSchema = z.object({
   directory: z.string().describe("Absolute path to directory to serve"),
   port: z.number().int().min(1).max(65535).default(3000).describe("Port to serve on (default 3000)"),
+  startup_timeout: z
+    .number()
+    .int()
+    .positive()
+    .default(10000)
+    .describe("Max ms to wait for the server to respond (default 10000)"),
 });
 export type DevServeInput = z.infer<typeof DevServeSchema>;
 
@@ -41,6 +47,13 @@ export const DevRunSchema = z.object({
     .record(z.string(), z.string())
     .optional()
     .describe("Additional environment variables"),
+  timeout: z
+    .number()
+    .int()
+    .positive()
+    .max(600000)
+    .default(300000)
+    .describe("Timeout in ms (default 300000 = 5 min, max 600000 = 10 min)"),
 });
 export type DevRunInput = z.infer<typeof DevRunSchema>;
 
@@ -48,9 +61,9 @@ export type DevRunInput = z.infer<typeof DevRunSchema>;
 export const DevWorktreeSchema = z.object({
   branch: z.string().describe("Git branch name"),
   action: z
-    .enum(["create", "build", "remove"])
+    .enum(["create", "build", "remove", "list"])
     .describe(
-      "create: create worktree and install deps; build: run build command in worktree; remove: clean up worktree"
+      "create: create worktree and install deps; build: run build command in worktree; remove: clean up worktree; list: show all worktrees"
     ),
   node_version: z
     .string()
@@ -90,6 +103,12 @@ export const DevVisualRegressionSchema = z.object({
     .string()
     .default("yarn pw:update")
     .describe("Playwright update baselines command (default: 'yarn pw:update')"),
+  startup_timeout: z
+    .number()
+    .int()
+    .positive()
+    .default(15000)
+    .describe("Max ms to wait for serve to respond (default 15000)"),
 });
 export type DevVisualRegressionInput = z.infer<typeof DevVisualRegressionSchema>;
 
@@ -97,29 +116,29 @@ export type DevVisualRegressionInput = z.infer<typeof DevVisualRegressionSchema>
 export const GitHubProjectNextIssueSchema = z.object({
   project_id: z
     .string()
-    .default("PVT_kwHOAWmP0M4BQ4Fi")
-    .describe("GitHub ProjectV2 node ID"),
+    .default(process.env.GITHUB_PROJECT_ID ?? "PVT_kwHOAWmP0M4BQ4Fi")
+    .describe("GitHub ProjectV2 node ID (env: GITHUB_PROJECT_ID)"),
   status_field_id: z
     .string()
-    .default("PVTSSF_lAHOAWmP0M4BQ4Fizg-3q2k")
-    .describe("Status field ID"),
+    .default(process.env.GITHUB_STATUS_FIELD_ID ?? "PVTSSF_lAHOAWmP0M4BQ4Fizg-3q2k")
+    .describe("Status field ID (env: GITHUB_STATUS_FIELD_ID)"),
   todo_option_id: z
     .string()
-    .default("f75ad846")
-    .describe("Option ID for Todo status"),
+    .default(process.env.GITHUB_TODO_OPTION_ID ?? "f75ad846")
+    .describe("Option ID for Todo status (env: GITHUB_TODO_OPTION_ID)"),
 });
 export type GitHubProjectNextIssueInput = z.infer<typeof GitHubProjectNextIssueSchema>;
 
 export const GitHubProjectSetStatusSchema = z.object({
   project_id: z
     .string()
-    .default("PVT_kwHOAWmP0M4BQ4Fi")
-    .describe("GitHub ProjectV2 node ID"),
+    .default(process.env.GITHUB_PROJECT_ID ?? "PVT_kwHOAWmP0M4BQ4Fi")
+    .describe("GitHub ProjectV2 node ID (env: GITHUB_PROJECT_ID)"),
   item_id: z.string().describe("Project item node ID"),
   status_field_id: z
     .string()
-    .default("PVTSSF_lAHOAWmP0M4BQ4Fizg-3q2k")
-    .describe("Status field ID"),
+    .default(process.env.GITHUB_STATUS_FIELD_ID ?? "PVTSSF_lAHOAWmP0M4BQ4Fizg-3q2k")
+    .describe("Status field ID (env: GITHUB_STATUS_FIELD_ID)"),
   status_option_id: z
     .string()
     .describe("Option ID for the desired status (Todo/In Progress/Done)"),
@@ -135,16 +154,16 @@ export const GitHubProjectCompleteIssueSchema = z.object({
   item_id: z.string().describe("Project item node ID to set to Done"),
   project_id: z
     .string()
-    .default("PVT_kwHOAWmP0M4BQ4Fi")
-    .describe("GitHub ProjectV2 node ID"),
+    .default(process.env.GITHUB_PROJECT_ID ?? "PVT_kwHOAWmP0M4BQ4Fi")
+    .describe("GitHub ProjectV2 node ID (env: GITHUB_PROJECT_ID)"),
   status_field_id: z
     .string()
-    .default("PVTSSF_lAHOAWmP0M4BQ4Fizg-3q2k")
-    .describe("Status field ID"),
+    .default(process.env.GITHUB_STATUS_FIELD_ID ?? "PVTSSF_lAHOAWmP0M4BQ4Fizg-3q2k")
+    .describe("Status field ID (env: GITHUB_STATUS_FIELD_ID)"),
   done_option_id: z
     .string()
-    .default("98236657")
-    .describe("Option ID for Done status"),
+    .default(process.env.GITHUB_DONE_OPTION_ID ?? "98236657")
+    .describe("Option ID for Done status (env: GITHUB_DONE_OPTION_ID)"),
 });
 export type GitHubProjectCompleteIssueInput = z.infer<typeof GitHubProjectCompleteIssueSchema>;
 
@@ -170,6 +189,12 @@ export const GitConventionalCommitSchema = z.object({
     .describe(
       "Files to stage before committing. If omitted, commits currently staged files."
     ),
+  strict: z
+    .boolean()
+    .default(true)
+    .describe(
+      "If true, enforce standard conventional commit types (feat, fix, docs, etc). If false, allow any <word>: <description> format."
+    ),
 });
 export type GitConventionalCommitInput = z.infer<typeof GitConventionalCommitSchema>;
 
@@ -178,3 +203,147 @@ export const NetlifyDeployStatusSchema = z.object({
   site_name: z.string().describe("Netlify site name or ID"),
 });
 export type NetlifyDeployStatusInput = z.infer<typeof NetlifyDeployStatusSchema>;
+
+// === shell tools ===
+export const ShellLintSchema = z.object({
+  files: z.array(z.string()).min(1).describe("Paths to shell files to lint"),
+  shell: z
+    .enum(["bash", "sh", "zsh", "dash"])
+    .default("bash")
+    .describe("Shell dialect (default: bash)"),
+  severity: z
+    .enum(["error", "warning", "info", "style"])
+    .default("style")
+    .describe("Minimum severity to report (default: style)"),
+});
+export type ShellLintInput = z.infer<typeof ShellLintSchema>;
+
+// === memory tools ===
+
+const MemoryEntitySchema = z.object({
+  name: z.string().describe("Unique entity name"),
+  type: z
+    .string()
+    .describe(
+      "Entity type (e.g. person, tool, language, framework, preference, convention, project, workflow)"
+    ),
+  observations: z
+    .array(z.string())
+    .optional()
+    .describe("Initial observations/facts about the entity"),
+});
+
+export const MemoryAddEntitiesSchema = z.object({
+  entities: z.array(MemoryEntitySchema).min(1).describe("Entities to create"),
+});
+export type MemoryAddEntitiesInput = z.infer<typeof MemoryAddEntitiesSchema>;
+
+export const MemoryAddRelationsSchema = z.object({
+  relations: z
+    .array(
+      z.object({
+        src: z.string().describe("Source entity name"),
+        rel: z
+          .string()
+          .describe(
+            "Relation type (e.g. PREFERS, USES, AVOIDS, DEPENDS_ON, CATEGORY_OF, RELATED_TO, WORKS_ON, CREATED_BY)"
+          ),
+        dst: z.string().describe("Destination entity name"),
+      })
+    )
+    .min(1)
+    .describe("Relations to create"),
+});
+export type MemoryAddRelationsInput = z.infer<typeof MemoryAddRelationsSchema>;
+
+export const MemoryAddObservationsSchema = z.object({
+  entity: z.string().describe("Entity name to add observations to"),
+  observations: z
+    .array(z.string())
+    .min(1)
+    .describe("Facts/observations to add to the entity"),
+});
+export type MemoryAddObservationsInput = z.infer<typeof MemoryAddObservationsSchema>;
+
+export const MemoryQuerySchema = z.object({
+  name: z
+    .string()
+    .optional()
+    .describe("Search entities by name (substring match, case-insensitive)"),
+  type: z.string().optional().describe("Filter entities by exact type"),
+  relation: z
+    .string()
+    .optional()
+    .describe("Filter by relation type when traversing"),
+  depth: z
+    .number()
+    .int()
+    .min(1)
+    .max(5)
+    .default(1)
+    .describe("Traversal depth for related entities (default 1)"),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(20)
+    .describe("Max entities to return (default 20)"),
+});
+export type MemoryQueryInput = z.infer<typeof MemoryQuerySchema>;
+
+export const MemoryDeleteSchema = z.object({
+  entities: z
+    .array(z.string())
+    .optional()
+    .describe("Entity names to delete (cascades to their observations and relations)"),
+  relations: z
+    .array(
+      z.object({
+        src: z.string(),
+        rel: z.string(),
+        dst: z.string(),
+      })
+    )
+    .optional()
+    .describe("Specific relations to delete"),
+  observations: z
+    .array(
+      z.object({
+        entity: z.string(),
+        content: z.string(),
+      })
+    )
+    .optional()
+    .describe("Specific observations to delete"),
+});
+export type MemoryDeleteInput = z.infer<typeof MemoryDeleteSchema>;
+
+export const MemoryExportSchema = z.object({});
+export type MemoryExportInput = z.infer<typeof MemoryExportSchema>;
+
+export const MemoryImportSchema = z.object({
+  data: z
+    .object({
+      entities: z.array(
+        z.object({
+          name: z.string(),
+          type: z.string(),
+          observations: z.array(z.string()),
+        })
+      ),
+      relations: z.array(
+        z.object({
+          src: z.string(),
+          rel: z.string(),
+          dst: z.string(),
+        })
+      ),
+    })
+    .describe("Graph data in the standard export format"),
+  merge: z
+    .boolean()
+    .default(true)
+    .describe("If true, merge with existing data. If false, replace all data."),
+});
+export type MemoryImportInput = z.infer<typeof MemoryImportSchema>;
