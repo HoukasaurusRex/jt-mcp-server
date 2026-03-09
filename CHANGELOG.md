@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.3.0...v1.3.1) (2026-03-09)
+
+
+### Bug Fixes
+
+* replace better-sqlite3 with sql.js to eliminate native addon crashes ([62be05c](https://github.com/HoukasaurusRex/jt-mcp-server/commit/62be05c2f295c0cd8ccfc163b86fdafe0fd810ff))
+
 # [1.3.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.2.0...v1.3.0) (2026-03-09)
 
 
