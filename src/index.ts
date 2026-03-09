@@ -25,22 +25,32 @@ const server = new McpServer({
   version: "0.0.0",
 });
 
-registerDevPort(server);
-registerDevServe(server);
-registerDevRun(server);
-registerDevInstall(server);
-registerDevScript(server);
-registerDevDeps(server);
-registerDevWorktree(server);
-registerDevVisualRegression(server);
-registerGitHub(server);
-registerGit(server);
-registerNetlify(server);
-registerShell(server);
-registerSearch(server);
-registerJira(server);
-registerConfluence(server);
-registerMemory(server);
+const toolGroups: [string, (s: typeof server) => void][] = [
+  ["dev-port", registerDevPort],
+  ["dev-serve", registerDevServe],
+  ["dev-run", registerDevRun],
+  ["dev-install", registerDevInstall],
+  ["dev-script", registerDevScript],
+  ["dev-deps", registerDevDeps],
+  ["dev-worktree", registerDevWorktree],
+  ["dev-visual-regression", registerDevVisualRegression],
+  ["github", registerGitHub],
+  ["git", registerGit],
+  ["netlify", registerNetlify],
+  ["shell", registerShell],
+  ["search", registerSearch],
+  ["jira", registerJira],
+  ["confluence", registerConfluence],
+  ["memory", registerMemory],
+];
+
+for (const [name, register] of toolGroups) {
+  try {
+    register(server);
+  } catch (err) {
+    console.error(`[jt-mcp] Failed to register ${name} tools:`, err);
+  }
+}
 
 const transport = new StdioServerTransport();
 await server.connect(transport);

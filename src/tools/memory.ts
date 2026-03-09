@@ -42,7 +42,7 @@ export function register(server: McpServer): void {
     },
     async ({ entities }: MemoryAddEntitiesInput) => {
       try {
-        const db = getDb();
+        const db = await getDb();
         const insertEntity = db.prepare(
           "INSERT OR IGNORE INTO entities (name, type) VALUES (?, ?)"
         );
@@ -85,7 +85,7 @@ export function register(server: McpServer): void {
     },
     async ({ relations }: MemoryAddRelationsInput) => {
       try {
-        const db = getDb();
+        const db = await getDb();
         const checkEntity = db.prepare(
           "SELECT name FROM entities WHERE name = ?"
         );
@@ -136,7 +136,7 @@ export function register(server: McpServer): void {
     },
     async ({ entity, observations }: MemoryAddObservationsInput) => {
       try {
-        const db = getDb();
+        const db = await getDb();
         const check = db.prepare(
           "SELECT name FROM entities WHERE name = ?"
         );
@@ -180,7 +180,7 @@ export function register(server: McpServer): void {
     },
     async ({ name, type, relation, depth, limit }: MemoryQueryInput) => {
       try {
-        const db = getDb();
+        const db = await getDb();
 
         // Find seed entities
         const conditions: string[] = [];
@@ -198,7 +198,7 @@ export function register(server: McpServer): void {
           conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
         const seeds = db
           .prepare(`SELECT name, type FROM entities ${where} LIMIT ?`)
-          .all(...params, limit) as EntityRow[];
+          .all(...params, limit) as unknown as EntityRow[];
 
         if (seeds.length === 0) {
           return textResult(JSON.stringify({ entities: [], relations: [] }, null, 2));
@@ -241,7 +241,7 @@ export function register(server: McpServer): void {
               relation
                 ? getOutgoing.all(entityName, relation)
                 : getOutgoing.all(entityName)
-            ) as RelationRow[];
+            ) as unknown as RelationRow[];
             for (const r of rels) {
               if (!visited.has(r.dst)) {
                 nextFrontier.push(r.dst);
@@ -270,7 +270,7 @@ export function register(server: McpServer): void {
                 .prepare(
                   `SELECT src, rel, dst FROM relations WHERE src IN (${placeholders}) AND dst IN (${placeholders})`
                 )
-                .all(...entityNames, ...entityNames) as RelationRow[])
+                .all(...entityNames, ...entityNames) as unknown as RelationRow[])
             : [];
 
         return textResult(
@@ -297,7 +297,7 @@ export function register(server: McpServer): void {
     },
     async ({ entities, relations, observations }: MemoryDeleteInput) => {
       try {
-        const db = getDb();
+        const db = await getDb();
         const summary: string[] = [];
 
         const deleteAll = db.transaction(() => {
@@ -359,7 +359,7 @@ export function register(server: McpServer): void {
     },
     async () => {
       try {
-        const db = getDb();
+        const db = await getDb();
         const data = exportGraph(db);
         return textResult(JSON.stringify(data, null, 2));
       } catch (err) {
@@ -378,7 +378,7 @@ export function register(server: McpServer): void {
     },
     async ({ data, merge }: MemoryImportInput) => {
       try {
-        const db = getDb();
+        const db = await getDb();
 
         const importAll = db.transaction(() => {
           if (!merge) {

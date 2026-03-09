@@ -1,10 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import Database from "better-sqlite3";
+import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest";
+import initSqlJs, { type Database as SqlJsDatabase } from "sql.js";
+import type { CompatDatabase } from "../lib/memory-db.js";
 
-let testDb: Database.Database;
+let SQL: initSqlJs.SqlJsStatic;
+let rawDb: SqlJsDatabase;
+let testDb: CompatDatabase;
 
 vi.mock("../lib/memory-db.js", () => ({
-  getDb: () => testDb,
+  getDb: () => Promise.resolve(testDb),
   closeDb: () => {},
   exportGraph: vi.fn(),
   autoExport: vi.fn(),
@@ -36,6 +39,70 @@ CREATE TABLE IF NOT EXISTS relations (
 );
 `;
 
+/** Build a compat wrapper around a raw sql.js database (mirrors memory-db.ts wrapDatabase) */
+function wrapTestDb(raw: SqlJsDatabase): CompatDatabase {
+  return {
+    prepare(sql: string) {
+      return {
+        run(...params: unknown[]) {
+          const stmt = raw.prepare(sql);
+          try {
+            stmt.run(params.length > 0 ? params as initSqlJs.BindParams : undefined);
+            return { changes: raw.getRowsModified() };
+          } finally {
+            stmt.free();
+          }
+        },
+        get(...params: unknown[]) {
+          const stmt = raw.prepare(sql);
+          try {
+            if (params.length > 0) stmt.bind(params as initSqlJs.BindParams);
+            if (!stmt.step()) return undefined;
+            return stmt.getAsObject() as Record<string, unknown>;
+          } finally {
+            stmt.free();
+          }
+        },
+        all(...params: unknown[]) {
+          const stmt = raw.prepare(sql);
+          try {
+            if (params.length > 0) stmt.bind(params as initSqlJs.BindParams);
+            const rows: Record<string, unknown>[] = [];
+            while (stmt.step()) {
+              rows.push(stmt.getAsObject() as Record<string, unknown>);
+            }
+            return rows;
+          } finally {
+            stmt.free();
+          }
+        },
+      };
+    },
+    exec(sql: string) {
+      raw.run(sql);
+    },
+    pragma(cmd: string) {
+      raw.run(`PRAGMA ${cmd}`);
+    },
+    transaction<T>(fn: () => T): () => T {
+      return () => {
+        raw.run("BEGIN");
+        try {
+          const result = fn();
+          raw.run("COMMIT");
+          return result;
+        } catch (err) {
+          raw.run("ROLLBACK");
+          throw err;
+        }
+      };
+    },
+    close() {
+      raw.close();
+    },
+  };
+}
+
 function getHandler(mockServer: any, toolName: string) {
   const call = mockServer.registerTool.mock.calls.find(
     (c: any) => c[0] === toolName
@@ -45,9 +112,14 @@ function getHandler(mockServer: any, toolName: string) {
 }
 
 describe("memory", () => {
+  beforeAll(async () => {
+    SQL = await initSqlJs();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
-    testDb = new Database(":memory:");
+    rawDb = new SQL.Database();
+    testDb = wrapTestDb(rawDb);
     testDb.pragma("foreign_keys = ON");
     testDb.exec(SCHEMA_SQL);
 
@@ -71,7 +143,7 @@ describe("memory", () => {
       return {
         version: 1,
         exported_at: new Date().toISOString(),
-        entities: entities.map((e) => ({
+        entities: entities.map((e: any) => ({
           name: e.name,
           type: e.type,
           observations: obsByEntity.get(e.name) ?? [],
