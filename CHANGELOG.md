@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.2.0...v1.3.0) (2026-03-09)
+
+
+### Features
+
+* add search, jira, confluence, and netlify debugging tools ([3bdfe9b](https://github.com/HoukasaurusRex/jt-mcp-server/commit/3bdfe9b79658a067c65bfd82ff554da6c4612e28))
+
 # [1.2.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.1.0...v1.2.0) (2026-03-09)
 
 
