@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.1.0...v1.2.0) (2026-03-09)
+
+
+### Features
+
+* add dev_install, dev_script, and dev_deps tools with shared package manager detection ([8a971a3](https://github.com/HoukasaurusRex/jt-mcp-server/commit/8a971a36ef56346ebd95853f9a5a0f9a2519cc7e))
+
 # [1.1.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.0.0...v1.1.0) (2026-03-06)
 
 
