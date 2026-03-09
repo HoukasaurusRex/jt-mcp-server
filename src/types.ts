@@ -112,6 +112,72 @@ export const DevVisualRegressionSchema = z.object({
 });
 export type DevVisualRegressionInput = z.infer<typeof DevVisualRegressionSchema>;
 
+// === dev_install ===
+export const DevInstallSchema = z.object({
+  cwd: z.string().describe("Absolute path to the project directory"),
+  frozen: z
+    .boolean()
+    .default(false)
+    .describe("Use frozen/immutable lockfile (CI mode)"),
+  node_version: z
+    .string()
+    .optional()
+    .describe("Node version to use via nvm (e.g. '20', '22')"),
+  timeout: z
+    .number()
+    .int()
+    .positive()
+    .max(600000)
+    .default(300000)
+    .describe("Timeout in ms (default 300000 = 5 min)"),
+});
+export type DevInstallInput = z.infer<typeof DevInstallSchema>;
+
+// === dev_script ===
+export const DevScriptSchema = z.object({
+  script: z.string().describe("Package.json script name to run (e.g. 'build', 'test', 'lint')"),
+  args: z.string().optional().describe("Additional arguments to pass to the script"),
+  cwd: z.string().optional().describe("Project directory (default: process cwd)"),
+  node_version: z
+    .string()
+    .optional()
+    .describe("Node version to use via nvm (e.g. '20', '22')"),
+  timeout: z
+    .number()
+    .int()
+    .positive()
+    .max(600000)
+    .default(300000)
+    .describe("Timeout in ms (default 300000 = 5 min)"),
+});
+export type DevScriptInput = z.infer<typeof DevScriptSchema>;
+
+// === dev_deps ===
+export const DevDepsSchema = z.object({
+  action: z.enum(["add", "remove"]).describe("Whether to add or remove packages"),
+  packages: z
+    .array(z.string())
+    .min(1)
+    .describe("Package names with optional version specifiers (e.g. 'zod', 'vitest@^1.0.0')"),
+  dev: z
+    .boolean()
+    .default(false)
+    .describe("Add as devDependency (ignored for remove)"),
+  cwd: z.string().optional().describe("Project directory (default: process cwd)"),
+  node_version: z
+    .string()
+    .optional()
+    .describe("Node version to use via nvm (e.g. '20', '22')"),
+  timeout: z
+    .number()
+    .int()
+    .positive()
+    .max(600000)
+    .default(300000)
+    .describe("Timeout in ms (default 300000 = 5 min)"),
+});
+export type DevDepsInput = z.infer<typeof DevDepsSchema>;
+
 // === github tools ===
 export const GitHubProjectNextIssueSchema = z.object({
   project_id: z

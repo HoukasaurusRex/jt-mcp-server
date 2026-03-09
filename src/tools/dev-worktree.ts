@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { DevWorktreeSchema } from "../types.js";
 import { textResult, errorResult } from "../lib/tool-result.js";
+import { resolveNodeBinPath } from "../lib/nvm-utils.js";
 
 function worktreePath(branch: string): string {
   return join(process.cwd(), ".claude", "worktrees", branch.replace(/\//g, "-"));
@@ -54,7 +55,6 @@ export function register(server: McpServer): void {
             };
 
             if (node_version) {
-              const { resolveNodeBinPath } = await import("./dev-run.js");
               const binPath = resolveNodeBinPath(node_version);
               if (binPath) {
                 installEnv.PATH = `${binPath}:${installEnv.PATH ?? ""}`;
@@ -84,7 +84,6 @@ export function register(server: McpServer): void {
             };
 
             if (node_version) {
-              const { resolveNodeBinPath } = await import("./dev-run.js");
               const binPath = resolveNodeBinPath(node_version);
               if (binPath) {
                 buildEnv.PATH = `${binPath}:${buildEnv.PATH ?? ""}`;

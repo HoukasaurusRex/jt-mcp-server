@@ -6,6 +6,9 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { register as registerDevPort } from "./tools/dev-port.js";
 import { register as registerDevServe } from "./tools/dev-serve.js";
 import { register as registerDevRun } from "./tools/dev-run.js";
+import { register as registerDevInstall } from "./tools/dev-install.js";
+import { register as registerDevScript } from "./tools/dev-script.js";
+import { register as registerDevDeps } from "./tools/dev-deps.js";
 import { register as registerDevWorktree } from "./tools/dev-worktree.js";
 import { register as registerDevVisualRegression } from "./tools/dev-visual-regression.js";
 import { register as registerGitHub } from "./tools/github.js";
@@ -22,6 +25,9 @@ const server = new McpServer({
 registerDevPort(server);
 registerDevServe(server);
 registerDevRun(server);
+registerDevInstall(server);
+registerDevScript(server);
+registerDevDeps(server);
 registerDevWorktree(server);
 registerDevVisualRegression(server);
 registerGitHub(server);
