@@ -270,6 +270,48 @@ export const NetlifyDeployStatusSchema = z.object({
 });
 export type NetlifyDeployStatusInput = z.infer<typeof NetlifyDeployStatusSchema>;
 
+export const NetlifyBuildLogSchema = z.object({
+  site_name: z.string().describe("Netlify site name or ID"),
+  deploy_id: z
+    .string()
+    .optional()
+    .describe("Specific deploy ID to get logs for (default: latest deploy)"),
+  tail: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .default(100)
+    .describe("Number of log lines from the end to return (default 100)"),
+});
+export type NetlifyBuildLogInput = z.infer<typeof NetlifyBuildLogSchema>;
+
+export const NetlifyFunctionLogSchema = z.object({
+  site_name: z.string().describe("Netlify site name or ID"),
+  function_name: z
+    .string()
+    .optional()
+    .describe("Specific function name to filter logs (default: all functions)"),
+});
+export type NetlifyFunctionLogInput = z.infer<typeof NetlifyFunctionLogSchema>;
+
+export const NetlifyListDeploysSchema = z.object({
+  site_name: z.string().describe("Netlify site name or ID"),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .default(5)
+    .describe("Number of recent deploys to list (default 5)"),
+});
+export type NetlifyListDeploysInput = z.infer<typeof NetlifyListDeploysSchema>;
+
+export const NetlifyListFunctionsSchema = z.object({
+  site_name: z.string().describe("Netlify site name or ID"),
+});
+export type NetlifyListFunctionsInput = z.infer<typeof NetlifyListFunctionsSchema>;
+
 // === shell tools ===
 export const ShellLintSchema = z.object({
   files: z.array(z.string()).min(1).describe("Paths to shell files to lint"),
@@ -283,6 +325,225 @@ export const ShellLintSchema = z.object({
     .describe("Minimum severity to report (default: style)"),
 });
 export type ShellLintInput = z.infer<typeof ShellLintSchema>;
+
+// === search tools ===
+export const DevGrepSchema = z.object({
+  pattern: z.string().describe("Search pattern (regex supported)"),
+  cwd: z.string().describe("Absolute path to the project directory to search within"),
+  glob: z
+    .string()
+    .optional()
+    .describe("Glob filter for files (e.g. '*.ts', '*.{js,jsx}')"),
+  fixed_strings: z
+    .boolean()
+    .default(false)
+    .describe("Treat pattern as a literal string, not a regex"),
+  case_insensitive: z.boolean().default(false).describe("Case-insensitive search"),
+  context_lines: z
+    .number()
+    .int()
+    .min(0)
+    .max(10)
+    .default(2)
+    .describe("Lines of context around each match (default 2)"),
+  max_results: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .default(100)
+    .describe("Maximum number of matching lines to return (default 100)"),
+  files_only: z
+    .boolean()
+    .default(false)
+    .describe("Return only file paths, not matching lines"),
+});
+export type DevGrepInput = z.infer<typeof DevGrepSchema>;
+
+export const DevFindSchema = z.object({
+  pattern: z.string().describe("Glob pattern to match files (e.g. '**/*.ts', 'src/**/*.test.*')"),
+  cwd: z.string().describe("Absolute path to the project directory to search within"),
+  type: z
+    .enum(["file", "directory", "all"])
+    .default("file")
+    .describe("Match files, directories, or both (default: file)"),
+  max_results: z
+    .number()
+    .int()
+    .min(1)
+    .max(1000)
+    .default(200)
+    .describe("Maximum number of results to return (default 200)"),
+});
+export type DevFindInput = z.infer<typeof DevFindSchema>;
+
+export const DevReadSchema = z.object({
+  path: z.string().describe("Absolute path to the file to read"),
+  cwd: z.string().describe("Absolute path to the project directory (file must be inside this)"),
+  start_line: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("First line to read (1-based, inclusive)"),
+  end_line: z
+    .number()
+    .int()
+    .min(1)
+    .optional()
+    .describe("Last line to read (1-based, inclusive)"),
+  max_lines: z
+    .number()
+    .int()
+    .min(1)
+    .max(5000)
+    .default(500)
+    .describe("Maximum lines to return (default 500)"),
+});
+export type DevReadInput = z.infer<typeof DevReadSchema>;
+
+export const DevTreeSchema = z.object({
+  cwd: z.string().describe("Absolute path to the directory to display"),
+  depth: z
+    .number()
+    .int()
+    .min(1)
+    .max(10)
+    .default(3)
+    .describe("Maximum depth to traverse (default 3)"),
+  include_hidden: z
+    .boolean()
+    .default(false)
+    .describe("Include hidden files/directories (dotfiles)"),
+  directories_only: z
+    .boolean()
+    .default(false)
+    .describe("Show only directories, not files"),
+});
+export type DevTreeInput = z.infer<typeof DevTreeSchema>;
+
+// === jira tools (via acli CLI — run `acli auth login` first) ===
+export const JiraSearchSchema = z.object({
+  jql: z
+    .string()
+    .describe(
+      "JQL query string (e.g. 'project = PROJ AND status = \"To Do\"', 'assignee = currentUser() ORDER BY created DESC')"
+    ),
+  max_results: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(20)
+    .describe("Maximum issues to return (default 20)"),
+  fields: z
+    .string()
+    .default("key,summary,status,assignee,priority,issuetype")
+    .describe("Comma-separated field names to include (e.g. 'key,summary,status,assignee')"),
+});
+export type JiraSearchInput = z.infer<typeof JiraSearchSchema>;
+
+export const JiraGetIssueSchema = z.object({
+  issue_key: z.string().describe("Issue key (e.g. 'PROJ-123')"),
+  fields: z
+    .string()
+    .optional()
+    .describe("Comma-separated fields to return (e.g. 'summary,status,comment')"),
+});
+export type JiraGetIssueInput = z.infer<typeof JiraGetIssueSchema>;
+
+export const JiraCreateIssueSchema = z.object({
+  project_key: z.string().describe("Project key (e.g. 'PROJ')"),
+  summary: z.string().describe("Issue title/summary"),
+  issue_type: z
+    .string()
+    .default("Task")
+    .describe("Issue type (e.g. 'Bug', 'Task', 'Story', 'Epic')"),
+  description: z
+    .string()
+    .optional()
+    .describe("Issue description (plain text)"),
+  assignee: z
+    .string()
+    .optional()
+    .describe("Assignee email or '@me' for self-assign"),
+  labels: z.array(z.string()).optional().describe("Labels to apply"),
+  parent_key: z
+    .string()
+    .optional()
+    .describe("Parent issue key for subtasks or stories under an epic"),
+});
+export type JiraCreateIssueInput = z.infer<typeof JiraCreateIssueSchema>;
+
+export const JiraTransitionSchema = z.object({
+  issue_key: z.string().describe("Issue key (e.g. 'PROJ-123')"),
+  status: z
+    .string()
+    .describe("Target status name (e.g. 'In Progress', 'Done', 'To Do')"),
+});
+export type JiraTransitionInput = z.infer<typeof JiraTransitionSchema>;
+
+export const JiraAddCommentSchema = z.object({
+  issue_key: z.string().describe("Issue key (e.g. 'PROJ-123')"),
+  body: z.string().describe("Comment text (plain text)"),
+});
+export type JiraAddCommentInput = z.infer<typeof JiraAddCommentSchema>;
+
+export const JiraAssignSchema = z.object({
+  issue_key: z.string().describe("Issue key (e.g. 'PROJ-123')"),
+  assignee: z
+    .string()
+    .describe("Assignee email, '@me' for self-assign, or 'unassign' to clear"),
+});
+export type JiraAssignInput = z.infer<typeof JiraAssignSchema>;
+
+// === confluence tools ===
+export const ConfluenceSearchSchema = z.object({
+  cql: z
+    .string()
+    .describe(
+      "CQL query string (e.g. 'type = page AND space = DEV AND text ~ \"deployment\"', 'title = \"API Guide\"')"
+    ),
+  max_results: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .default(10)
+    .describe("Maximum pages to return (default 10)"),
+});
+export type ConfluenceSearchInput = z.infer<typeof ConfluenceSearchSchema>;
+
+export const ConfluenceGetPageSchema = z.object({
+  page_id: z.string().describe("Confluence page ID"),
+  format: z
+    .enum(["storage", "view", "atlas_doc_format"])
+    .default("storage")
+    .describe("Body format: 'storage' (XHTML), 'view' (rendered HTML), 'atlas_doc_format' (ADF JSON)"),
+});
+export type ConfluenceGetPageInput = z.infer<typeof ConfluenceGetPageSchema>;
+
+export const ConfluenceCreatePageSchema = z.object({
+  space_key: z.string().describe("Space key (e.g. 'DEV', 'ENG')"),
+  title: z.string().describe("Page title"),
+  body: z.string().describe("Page body in XHTML storage format"),
+  parent_id: z
+    .string()
+    .optional()
+    .describe("Parent page ID (creates as child page)"),
+});
+export type ConfluenceCreatePageInput = z.infer<typeof ConfluenceCreatePageSchema>;
+
+export const ConfluenceUpdatePageSchema = z.object({
+  page_id: z.string().describe("Confluence page ID to update"),
+  title: z.string().optional().describe("New title (default: keep existing)"),
+  body: z.string().describe("New page body in XHTML storage format"),
+  version_comment: z
+    .string()
+    .optional()
+    .describe("Version comment describing the change"),
+});
+export type ConfluenceUpdatePageInput = z.infer<typeof ConfluenceUpdatePageSchema>;
 
 // === memory tools ===
 
