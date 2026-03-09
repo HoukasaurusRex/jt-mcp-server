@@ -3,7 +3,7 @@
 [![CI](https://github.com/HoukasaurusRex/jt-mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/HoukasaurusRex/jt-mcp-server/actions/workflows/ci.yml)
 [![npm](https://img.shields.io/npm/v/@houkasaurusrex/jt-mcp-server)](https://www.npmjs.com/package/@houkasaurusrex/jt-mcp-server)
 
-Personal [Model Context Protocol](https://modelcontextprotocol.io) server that gives AI agents dev workflow tools — GitHub project management, conventional commits, static file serving, nvm-aware command execution, visual regression testing, and more.
+Personal [Model Context Protocol](https://modelcontextprotocol.io) server that gives AI agents dev workflow tools — GitHub project management, conventional commits, static file serving, nvm-aware command execution, visual regression testing, Jira/Confluence integration, and more.
 
 ## Quick Start
 
@@ -23,7 +23,10 @@ In your project's `.claude/settings.json`:
       "args": ["-y", "@houkasaurusrex/jt-mcp-server"],
       "env": {
         "GITHUB_TOKEN": "${GITHUB_TOKEN}",
-        "NETLIFY_AUTH_TOKEN": "${NETLIFY_AUTH_TOKEN}"
+        "NETLIFY_AUTH_TOKEN": "${NETLIFY_AUTH_TOKEN}",
+        "ATLASSIAN_DOMAIN": "${ATLASSIAN_DOMAIN}",
+        "ATLASSIAN_EMAIL": "${ATLASSIAN_EMAIL}",
+        "ATLASSIAN_API_TOKEN": "${ATLASSIAN_API_TOKEN}"
       }
     }
   }
@@ -46,6 +49,15 @@ In your project's `.claude/settings.json`:
 | `dev_deps` | Add or remove npm packages using the correct package manager. Supports devDependencies. |
 | `dev_visual_regression` | Orchestrate a full Playwright visual regression cycle: serve reference dir, capture baselines, serve test dir, run comparison, return results. |
 
+### Search & Exploration
+
+| Tool | Description |
+|------|-------------|
+| `dev_grep` | Search file contents for patterns (regex or literal) with context lines, glob filtering. Respects `.gitignore`. Uses ripgrep. |
+| `dev_find` | Find files/directories by glob pattern. Respects `.gitignore`. Uses `fd` with `git ls-files` fallback. |
+| `dev_read` | Read file contents with line numbers, optional line ranges, binary detection, and path traversal protection. |
+| `dev_tree` | Display directory tree structure. Skips `node_modules`, `.git`, build artifacts, and other common noise. |
+
 ### GitHub
 
 | Tool | Description |
@@ -61,6 +73,30 @@ In your project's `.claude/settings.json`:
 |------|-------------|
 | `git_conventional_commit` | Stage files and create a conventional commit. Validates message format, refuses to stage `.env` or `node_modules`. |
 
+### Jira (via `acli` CLI)
+
+Requires the [Atlassian CLI](https://developer.atlassian.com/cloud/acli/guides/install-acli/) — run `acli auth login` once to authenticate.
+
+| Tool | Description |
+|------|-------------|
+| `jira_search` | Search issues with JQL, configurable fields and result limits. |
+| `jira_get_issue` | Get full details of an issue by key. |
+| `jira_create_issue` | Create issues (Task, Bug, Story, Epic) with description, assignee, labels, parent. |
+| `jira_transition` | Transition issue status (e.g. "In Progress", "Done"). |
+| `jira_add_comment` | Add a comment to an issue. |
+| `jira_assign` | Assign (`user@email`, `@me`) or unassign an issue. |
+
+### Confluence (REST API)
+
+Requires `ATLASSIAN_DOMAIN`, `ATLASSIAN_EMAIL`, and `ATLASSIAN_API_TOKEN` env vars.
+
+| Tool | Description |
+|------|-------------|
+| `confluence_search` | Search pages with CQL, returns IDs, titles, spaces, excerpts. |
+| `confluence_get_page` | Read page content (storage XHTML, rendered HTML, or ADF). |
+| `confluence_create_page` | Create a page in a space, optional parent for child pages. |
+| `confluence_update_page` | Update page body/title with auto-incremented version. |
+
 ### Shell
 
 | Tool | Description |
@@ -72,6 +108,10 @@ In your project's `.claude/settings.json`:
 | Tool | Description |
 |------|-------------|
 | `netlify_deploy_status` | Check the latest deploy status for a Netlify site. |
+| `netlify_build_log` | Get build/deploy logs (last N lines) for diagnosing failed deploys and CI issues. |
+| `netlify_function_log` | Stream recent serverless function invocation logs for debugging. |
+| `netlify_list_deploys` | List recent deploys with status, branch, context, and error info. |
+| `netlify_list_functions` | List all deployed serverless functions for a site. |
 
 ### Memory (Knowledge Graph)
 
@@ -131,6 +171,11 @@ This project uses `@houkasaurusrex/jt-mcp-server` memory tools. At the start of 
 |----------|-------------|
 | `GITHUB_TOKEN` | GitHub tools (PAT with `repo` + `project` scopes) |
 | `NETLIFY_AUTH_TOKEN` | Netlify tools |
+| `ATLASSIAN_DOMAIN` | Confluence tools (e.g. `mycompany.atlassian.net`) |
+| `ATLASSIAN_EMAIL` | Confluence tools (account email) |
+| `ATLASSIAN_API_TOKEN` | Confluence tools ([create one](https://id.atlassian.com/manage-profile/security/api-tokens)) |
+
+Jira tools use the `acli` CLI which handles its own auth — run `acli auth login` once.
 
 ## Development
 
