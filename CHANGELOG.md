@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.3.1...v1.4.0) (2026-03-10)
+
+
+### Features
+
+* add memory_track_action and memory_suggest_tools for pattern-based tool discovery ([6f02c3a](https://github.com/HoukasaurusRex/jt-mcp-server/commit/6f02c3a398d2d74d4257498fdc641daccc099448))
+
 ## [1.3.1](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.3.0...v1.3.1) (2026-03-09)
 
 
