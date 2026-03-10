@@ -8,6 +8,8 @@ import {
   MemoryDeleteSchema,
   MemoryExportSchema,
   MemoryImportSchema,
+  MemoryTrackActionSchema,
+  MemorySuggestToolsSchema,
 } from "../types.js";
 import type {
   MemoryAddEntitiesInput,
@@ -16,6 +18,8 @@ import type {
   MemoryQueryInput,
   MemoryDeleteInput,
   MemoryImportInput,
+  MemoryTrackActionInput,
+  MemorySuggestToolsInput,
 } from "../types.js";
 import { textResult, errorResult } from "../lib/tool-result.js";
 
@@ -413,6 +417,124 @@ export function register(server: McpServer): void {
         return textResult(
           `Imported ${data.entities.length} entities and ${data.relations.length} relations (mode: ${merge ? "merge" : "replace"}).`
         );
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  // --- memory_track_action ---
+  server.registerTool(
+    "memory_track_action",
+    {
+      description:
+        "Track a substantive, repeatable action (build, test, deploy, lint, format, git workflow) " +
+        "so the system can detect patterns and suggest new MCP tools. " +
+        "Do NOT track trivial commands (ls, cd, file reads, one-off searches).",
+      inputSchema: MemoryTrackActionSchema,
+    },
+    async ({ command, description, project, tags, category }: MemoryTrackActionInput) => {
+      try {
+        const db = await getDb();
+        const tagsJson = tags ? JSON.stringify(tags) : null;
+        db.prepare(
+          "INSERT INTO tracked_actions (command, description, project, tags, category) VALUES (?, ?, ?, ?, ?)"
+        ).run(command, description ?? null, project ?? null, tagsJson, category ?? null);
+
+        const row = db.prepare(
+          "SELECT COUNT(*) as count FROM tracked_actions WHERE command = ?"
+        ).get(command) as { count: number };
+
+        autoExport(db);
+        return textResult(
+          `Tracked action "${command}" (total occurrences: ${row.count}).`
+        );
+      } catch (err) {
+        return errorResult(err instanceof Error ? err.message : String(err));
+      }
+    }
+  );
+
+  // --- memory_suggest_tools ---
+  server.registerTool(
+    "memory_suggest_tools",
+    {
+      description:
+        "Analyze tracked actions to find repeated patterns that could become new MCP tools. " +
+        "Returns exact command matches and tag-based clusters that exceed the occurrence/project thresholds.",
+      inputSchema: MemorySuggestToolsSchema,
+    },
+    async ({ min_occurrences, min_projects, category, limit }: MemorySuggestToolsInput) => {
+      try {
+        const db = await getDb();
+
+        // Tier 1: Exact command matches
+        const catFilter = category ? " WHERE category = ?" : "";
+        const catParams: unknown[] = category ? [category] : [];
+
+        const exactRows = db.prepare(
+          `SELECT command, description, category, ` +
+          `COUNT(*) as occurrences, ` +
+          `COUNT(DISTINCT project) as project_count, ` +
+          `GROUP_CONCAT(DISTINCT project) as projects, ` +
+          `MIN(created) as first_seen, ` +
+          `MAX(created) as last_seen ` +
+          `FROM tracked_actions${catFilter} ` +
+          `GROUP BY command ` +
+          `HAVING COUNT(*) >= ? AND COUNT(DISTINCT project) >= ? ` +
+          `ORDER BY COUNT(*) DESC, COUNT(DISTINCT project) DESC ` +
+          `LIMIT ?`
+        ).all(...catParams, min_occurrences, min_projects, limit) as Record<string, unknown>[];
+
+        const exactMatches = exactRows.map((r) => ({
+          command: r.command as string,
+          description: r.description as string | null,
+          category: r.category as string | null,
+          occurrences: r.occurrences as number,
+          project_count: r.project_count as number,
+          projects: r.projects ? (r.projects as string).split(",") : [],
+          first_seen: r.first_seen as string,
+          last_seen: r.last_seen as string,
+          suggestion: `Used ${r.occurrences} times across ${r.project_count} project(s). Consider creating an MCP tool.`,
+        }));
+
+        // Tier 2: Tag-based clusters (parse in JS since json_each may not be available)
+        const allActions = db.prepare(
+          `SELECT command, project, tags FROM tracked_actions WHERE tags IS NOT NULL${category ? " AND category = ?" : ""}`
+        ).all(...catParams) as { command: string; project: string | null; tags: string }[];
+
+        const tagStats = new Map<string, { commands: Set<string>; projects: Set<string>; count: number }>();
+        for (const row of allActions) {
+          let parsed: string[];
+          try {
+            parsed = JSON.parse(row.tags) as string[];
+          } catch {
+            continue;
+          }
+          for (const tag of parsed) {
+            const stats = tagStats.get(tag) ?? { commands: new Set(), projects: new Set(), count: 0 };
+            stats.commands.add(row.command);
+            if (row.project) stats.projects.add(row.project);
+            stats.count++;
+            tagStats.set(tag, stats);
+          }
+        }
+
+        const tagPatterns = [...tagStats.entries()]
+          .filter(([, s]) => s.commands.size >= 2 && s.count >= min_occurrences)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, limit)
+          .map(([tag, s]) => ({
+            tag,
+            total_uses: s.count,
+            distinct_commands: s.commands.size,
+            distinct_projects: s.projects.size,
+            example_commands: [...s.commands].slice(0, 5),
+            suggestion: `Tag "${tag}" appears in ${s.commands.size} distinct commands (${s.count} total uses). These may share a generalizable pattern.`,
+          }));
+
+        const result = { exact_matches: exactMatches, tag_patterns: tagPatterns };
+        return textResult(JSON.stringify(result, null, 2));
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }

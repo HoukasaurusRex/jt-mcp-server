@@ -35,6 +35,20 @@ CREATE INDEX IF NOT EXISTS idx_observations_entity ON observations(entity);
 CREATE INDEX IF NOT EXISTS idx_relations_src ON relations(src);
 CREATE INDEX IF NOT EXISTS idx_relations_dst ON relations(dst);
 CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type);
+
+CREATE TABLE IF NOT EXISTS tracked_actions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  command     TEXT NOT NULL,
+  description TEXT,
+  project     TEXT,
+  tags        TEXT,
+  category    TEXT,
+  created     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_tracked_actions_command ON tracked_actions(command);
+CREATE INDEX IF NOT EXISTS idx_tracked_actions_project ON tracked_actions(project);
+CREATE INDEX IF NOT EXISTS idx_tracked_actions_category ON tracked_actions(category);
 `;
 
 // --- Compatibility layer matching the better-sqlite3 API subset we use ---
@@ -187,11 +201,21 @@ export function _setDb(db: CompatDatabase | null): void {
 
 // --- Export / Import helpers ---
 
+export interface TrackedActionRow {
+  command: string;
+  description: string | null;
+  project: string | null;
+  tags: string | null;
+  category: string | null;
+  created: string;
+}
+
 export interface ExportData {
   version: number;
   exported_at: string;
   entities: { name: string; type: string; observations: string[] }[];
   relations: { src: string; rel: string; dst: string }[];
+  tracked_actions?: { command: string; description?: string; project?: string; tags?: string[]; category?: string; created: string }[];
 }
 
 export function exportGraph(db: CompatDatabase): ExportData {
@@ -214,6 +238,10 @@ export function exportGraph(db: CompatDatabase): ExportData {
     .prepare("SELECT src, rel, dst FROM relations ORDER BY src, rel, dst")
     .all() as { src: string; rel: string; dst: string }[];
 
+  const actions = db
+    .prepare("SELECT command, description, project, tags, category, created FROM tracked_actions ORDER BY created")
+    .all() as unknown as TrackedActionRow[];
+
   return {
     version: 1,
     exported_at: new Date().toISOString(),
@@ -226,6 +254,14 @@ export function exportGraph(db: CompatDatabase): ExportData {
       src: r.src as string,
       rel: r.rel as string,
       dst: r.dst as string,
+    })),
+    tracked_actions: actions.map((a) => ({
+      command: a.command,
+      ...(a.description ? { description: a.description } : {}),
+      ...(a.project ? { project: a.project } : {}),
+      ...(a.tags ? { tags: JSON.parse(a.tags) as string[] } : {}),
+      ...(a.category ? { category: a.category } : {}),
+      created: a.created,
     })),
   };
 }

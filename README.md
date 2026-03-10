@@ -124,6 +124,8 @@ Requires `ATLASSIAN_DOMAIN`, `ATLASSIAN_EMAIL`, and `ATLASSIAN_API_TOKEN` env va
 | `memory_delete` | Delete entities (cascades), relations, or observations. |
 | `memory_export` | Export the entire graph as JSON. |
 | `memory_import` | Import a graph from JSON (merge or replace). |
+| `memory_track_action` | Track a repeatable action (build, test, deploy, lint) for pattern detection. |
+| `memory_suggest_tools` | Analyze tracked actions to find patterns that could become new MCP tools. |
 
 ## Using the Memory Database
 
@@ -150,6 +152,36 @@ This project uses `@houkasaurusrex/jt-mcp-server` memory tools. At the start of 
 - The database persists at `~/.jt-memory/memory.db` across all projects and sessions.
 - Every write auto-exports to `~/.jt-memory/memory.json` as a human-readable backup.
 - Override paths with `JT_MEMORY_DB` and `JT_MEMORY_EXPORT_PATH` env vars.
+
+### Action tracking
+
+The memory system can track repeatable actions agents perform across projects and suggest when patterns should become dedicated MCP tools.
+
+**Tracking an action:**
+
+```json
+{ "command": "yarn lint --fix", "description": "Auto-fix lint issues", "project": "my-app", "tags": ["lint", "fix"], "category": "lint" }
+```
+
+**Checking for tool suggestions:**
+
+```json
+{ "min_occurrences": 3, "min_projects": 2 }
+```
+
+Returns exact command matches and tag-based clusters that exceed the thresholds, with suggestions for which patterns are good candidates for new tools.
+
+Add the following to your project's `CLAUDE.md` to enable action tracking:
+
+```markdown
+### Action Tracking
+
+When performing substantive, repeatable actions (build, test, deploy, lint, format, git workflow),
+call `memory_track_action` with command, description, project, tags, and category.
+Do NOT track trivial commands (ls, cd, file reads, one-off searches).
+
+Periodically call `memory_suggest_tools` to discover patterns worth converting to MCP tools.
+```
 
 ### Example: storing a preference
 

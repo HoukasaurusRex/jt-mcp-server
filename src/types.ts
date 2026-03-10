@@ -674,3 +674,63 @@ export const MemoryImportSchema = z.object({
     .describe("If true, merge with existing data. If false, replace all data."),
 });
 export type MemoryImportInput = z.infer<typeof MemoryImportSchema>;
+
+export const MemoryTrackActionSchema = z.object({
+  command: z
+    .string()
+    .describe(
+      "The command or action performed (e.g. 'yarn lint --fix', 'gh pr create --draft')"
+    ),
+  description: z
+    .string()
+    .optional()
+    .describe("Human-readable description of what this action does"),
+  project: z
+    .string()
+    .optional()
+    .describe("Project name or path where this action was performed"),
+  tags: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Tags for grouping similar actions (e.g. ['lint', 'fix', 'typescript'])"
+    ),
+  category: z
+    .string()
+    .optional()
+    .describe(
+      "Action category: build, test, deploy, lint, git, setup, debug, format, or custom"
+    ),
+});
+export type MemoryTrackActionInput = z.infer<typeof MemoryTrackActionSchema>;
+
+export const MemorySuggestToolsSchema = z.object({
+  min_occurrences: z
+    .number()
+    .int()
+    .min(2)
+    .default(3)
+    .describe(
+      "Minimum times an action must appear to be suggested (default 3)"
+    ),
+  min_projects: z
+    .number()
+    .int()
+    .min(1)
+    .default(1)
+    .describe(
+      "Minimum distinct projects an action must appear in (default 1)"
+    ),
+  category: z
+    .string()
+    .optional()
+    .describe("Filter suggestions to a specific category"),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(20)
+    .default(10)
+    .describe("Maximum number of suggestions to return (default 10)"),
+});
+export type MemorySuggestToolsInput = z.infer<typeof MemorySuggestToolsSchema>;

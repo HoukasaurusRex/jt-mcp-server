@@ -37,6 +37,15 @@ CREATE TABLE IF NOT EXISTS relations (
   created TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(src, rel, dst)
 );
+CREATE TABLE IF NOT EXISTS tracked_actions (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  command     TEXT NOT NULL,
+  description TEXT,
+  project     TEXT,
+  tags        TEXT,
+  category    TEXT,
+  created     TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 /** Build a compat wrapper around a raw sql.js database (mirrors memory-db.ts wrapDatabase) */
@@ -158,11 +167,11 @@ describe("memory", () => {
     expect(typeof register).toBe("function");
   });
 
-  it("should register all 7 memory tools", async () => {
+  it("should register all 9 memory tools", async () => {
     const { register } = await import("../tools/memory.js");
     const mockServer = { registerTool: vi.fn() };
     register(mockServer as any);
-    expect(mockServer.registerTool).toHaveBeenCalledTimes(7);
+    expect(mockServer.registerTool).toHaveBeenCalledTimes(9);
     const names = mockServer.registerTool.mock.calls.map((c: any) => c[0]);
     expect(names).toEqual([
       "memory_add_entities",
@@ -172,6 +181,8 @@ describe("memory", () => {
       "memory_delete",
       "memory_export",
       "memory_import",
+      "memory_track_action",
+      "memory_suggest_tools",
     ]);
   });
 
@@ -517,6 +528,120 @@ describe("memory", () => {
       const all = testDb.prepare("SELECT * FROM entities").all() as any[];
       expect(all).toHaveLength(1);
       expect(all[0].name).toBe("Fresh");
+    });
+  });
+
+  describe("memory_track_action", () => {
+    it("should insert an action and return count", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const track = getHandler(mockServer, "memory_track_action");
+
+      const result = await track({
+        command: "yarn lint --fix",
+        description: "Auto-fix lint issues",
+        project: "my-app",
+        tags: ["lint", "fix"],
+        category: "lint",
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain("total occurrences: 1");
+
+      // Track again
+      const result2 = await track({
+        command: "yarn lint --fix",
+        project: "other-app",
+      });
+      expect(result2.content[0].text).toContain("total occurrences: 2");
+    });
+
+    it("should handle missing optional fields", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const track = getHandler(mockServer, "memory_track_action");
+
+      const result = await track({ command: "npm test" });
+      expect(result.isError).toBeUndefined();
+      expect(result.content[0].text).toContain("npm test");
+    });
+  });
+
+  describe("memory_suggest_tools", () => {
+    async function seedActions(mockServer: any) {
+      const track = getHandler(mockServer, "memory_track_action");
+      // 3 occurrences of same command across 2 projects
+      await track({ command: "yarn lint --fix", project: "app-a", tags: ["lint", "fix"], category: "lint" });
+      await track({ command: "yarn lint --fix", project: "app-b", tags: ["lint", "fix"], category: "lint" });
+      await track({ command: "yarn lint --fix", project: "app-a", tags: ["lint", "fix"], category: "lint" });
+      // 2 occurrences of another command (below default threshold)
+      await track({ command: "yarn build", project: "app-a", tags: ["build"], category: "build" });
+      await track({ command: "yarn build", project: "app-a", tags: ["build"], category: "build" });
+      // Different lint command sharing tags
+      await track({ command: "eslint . --fix", project: "app-c", tags: ["lint", "fix"], category: "lint" });
+      await track({ command: "eslint . --fix", project: "app-c", tags: ["lint", "fix"], category: "lint" });
+      await track({ command: "eslint . --fix", project: "app-c", tags: ["lint", "fix"], category: "lint" });
+    }
+
+    it("should return empty when below thresholds", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const suggest = getHandler(mockServer, "memory_suggest_tools");
+
+      const result = await suggest({ min_occurrences: 3, min_projects: 1, limit: 10 });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.exact_matches).toHaveLength(0);
+    });
+
+    it("should surface commands meeting thresholds", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      await seedActions(mockServer);
+      const suggest = getHandler(mockServer, "memory_suggest_tools");
+
+      const result = await suggest({ min_occurrences: 3, min_projects: 1, limit: 10 });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.exact_matches.length).toBeGreaterThanOrEqual(1);
+      const lintMatch = data.exact_matches.find((m: any) => m.command === "yarn lint --fix");
+      expect(lintMatch).toBeDefined();
+      expect(lintMatch.occurrences).toBe(3);
+      expect(lintMatch.project_count).toBe(2);
+    });
+
+    it("should find tag-based patterns", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      await seedActions(mockServer);
+      const suggest = getHandler(mockServer, "memory_suggest_tools");
+
+      const result = await suggest({ min_occurrences: 3, min_projects: 1, limit: 10 });
+      const data = JSON.parse(result.content[0].text);
+      // "lint" and "fix" tags appear in both "yarn lint --fix" and "eslint . --fix"
+      const lintTag = data.tag_patterns.find((p: any) => p.tag === "lint");
+      expect(lintTag).toBeDefined();
+      expect(lintTag.distinct_commands).toBe(2);
+    });
+
+    it("should filter by category", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      await seedActions(mockServer);
+      const suggest = getHandler(mockServer, "memory_suggest_tools");
+
+      const result = await suggest({ min_occurrences: 2, min_projects: 1, category: "build", limit: 10 });
+      const data = JSON.parse(result.content[0].text);
+      // "yarn build" only has 2 occurrences in 1 project
+      const buildMatch = data.exact_matches.find((m: any) => m.command === "yarn build");
+      expect(buildMatch).toBeDefined();
+      // No lint commands should appear
+      const lintMatch = data.exact_matches.find((m: any) => m.command.includes("lint"));
+      expect(lintMatch).toBeUndefined();
     });
   });
 });
