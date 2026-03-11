@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.4.0...v1.5.0) (2026-03-11)
+
+
+### Features
+
+* migrate jira tools from acli CLI to Atlassian REST API ([a6ab964](https://github.com/HoukasaurusRex/jt-mcp-server/commit/a6ab964eee081d6f22692bea6d8b04f2ad03b3aa))
+
 # [1.4.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.3.1...v1.4.0) (2026-03-10)
 
 
