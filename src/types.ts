@@ -422,7 +422,7 @@ export const DevTreeSchema = z.object({
 });
 export type DevTreeInput = z.infer<typeof DevTreeSchema>;
 
-// === jira tools (via acli CLI — run `acli auth login` first) ===
+// === jira tools (via Atlassian REST API — requires ATLASSIAN_* env vars) ===
 export const JiraSearchSchema = z.object({
   jql: z
     .string()

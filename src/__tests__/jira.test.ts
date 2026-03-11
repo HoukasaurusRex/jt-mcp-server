@@ -1,8 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-vi.mock("execa", () => ({ execa: vi.fn() }));
-import { execa } from "execa";
-const mockExeca = vi.mocked(execa);
+vi.mock("../lib/atlassian-client.js", () => ({
+  atlassianFetch: vi.fn(),
+  getAtlassianConfig: vi.fn(() => ({
+    domain: "test.atlassian.net",
+    email: "test@example.com",
+    token: "fake-token",
+  })),
+}));
+
+import { atlassianFetch } from "../lib/atlassian-client.js";
+const mockFetch = vi.mocked(atlassianFetch);
 
 describe("jira tools", () => {
   beforeEach(() => {
@@ -38,16 +46,10 @@ describe("jira tools", () => {
       return mockServer.registerTool.mock.calls[0][2];
     }
 
-    it("should search issues with JQL via acli", async () => {
+    it("should search issues with JQL via REST API", async () => {
       const handler = await getHandler();
-      const jsonOutput = JSON.stringify([
-        { key: "PROJ-1", summary: "Fix bug", status: "To Do" },
-      ]);
-      mockExeca.mockResolvedValueOnce({
-        stdout: jsonOutput,
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      const issues = [{ key: "PROJ-1", fields: { summary: "Fix bug", status: { name: "To Do" } } }];
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, data: { issues } });
 
       const result = await handler({
         jql: "project = PROJ",
@@ -56,24 +58,18 @@ describe("jira tools", () => {
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("PROJ-1");
-
-      // Verify acli was called with correct args
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("jira");
-      expect(args).toContain("workitem");
-      expect(args).toContain("search");
-      expect(args).toContain("--jql");
-      expect(args).toContain("project = PROJ");
-      expect(args).toContain("--json");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/search", {
+        query: { jql: "project = PROJ", maxResults: 20, fields: "key,summary,status" },
+      });
     });
 
-    it("should return error on acli failure", async () => {
+    it("should return error on API failure", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "Invalid JQL query",
-        exitCode: 1,
-      } as any);
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        data: { errorMessages: ["Invalid JQL query"] },
+      });
 
       const result = await handler({
         jql: "bad query",
@@ -95,38 +91,23 @@ describe("jira tools", () => {
 
     it("should get issue details", async () => {
       const handler = await getHandler();
-      const jsonOutput = JSON.stringify({
-        key: "PROJ-42",
-        summary: "Add feature",
-        status: "In Progress",
-      });
-      mockExeca.mockResolvedValueOnce({
-        stdout: jsonOutput,
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      const issueData = { key: "PROJ-42", fields: { summary: "Add feature" } };
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, data: issueData });
 
       const result = await handler({ issue_key: "PROJ-42" });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("PROJ-42");
-
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("view");
-      expect(args).toContain("PROJ-42");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-42", { query: {} });
     });
 
-    it("should pass fields flag", async () => {
+    it("should pass fields query param", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: "{}",
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, data: {} });
 
       await handler({ issue_key: "PROJ-42", fields: "summary,comment" });
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("--fields");
-      expect(args).toContain("summary,comment");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-42", {
+        query: { fields: "summary,comment" },
+      });
     });
   });
 
@@ -140,11 +121,7 @@ describe("jira tools", () => {
 
     it("should create an issue", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: JSON.stringify({ key: "PROJ-99" }),
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-99" } });
 
       const result = await handler({
         project_key: "PROJ",
@@ -153,42 +130,75 @@ describe("jira tools", () => {
       });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("PROJ-99");
-
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("create");
-      expect(args).toContain("--project");
-      expect(args).toContain("PROJ");
-      expect(args).toContain("--summary");
-      expect(args).toContain("New task");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue", {
+        method: "POST",
+        body: {
+          fields: {
+            project: { key: "PROJ" },
+            summary: "New task",
+            issuetype: { name: "Task" },
+          },
+        },
+      });
     });
 
-    it("should pass optional flags", async () => {
+    it("should resolve @me assignee", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: JSON.stringify({ key: "PROJ-100" }),
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, data: { accountId: "me-123" } })
+        .mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-100" } });
+
+      await handler({
+        project_key: "PROJ",
+        summary: "Self-assigned",
+        issue_type: "Task",
+        assignee: "@me",
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/myself");
+      const createCall = mockFetch.mock.calls[1];
+      expect((createCall[1] as any).body.fields.assignee).toEqual({ accountId: "me-123" });
+    });
+
+    it("should resolve email assignee via user search", async () => {
+      const handler = await getHandler();
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, data: [{ accountId: "user-456" }] })
+        .mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-101" } });
+
+      await handler({
+        project_key: "PROJ",
+        summary: "Assigned to someone",
+        issue_type: "Task",
+        assignee: "user@example.com",
+      });
+
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/user/search", {
+        query: { query: "user@example.com" },
+      });
+    });
+
+    it("should pass optional fields", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-102" } });
 
       await handler({
         project_key: "PROJ",
         summary: "With options",
         issue_type: "Bug",
         description: "Bug description",
-        assignee: "user@example.com",
         labels: ["urgent", "frontend"],
         parent_key: "PROJ-50",
       });
 
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("--description");
-      expect(args).toContain("Bug description");
-      expect(args).toContain("--assignee");
-      expect(args).toContain("user@example.com");
-      expect(args).toContain("--label");
-      expect(args).toContain("urgent,frontend");
-      expect(args).toContain("--parent");
-      expect(args).toContain("PROJ-50");
+      const body = (mockFetch.mock.calls[0][1] as any).body.fields;
+      expect(body.description).toEqual({
+        type: "doc",
+        version: 1,
+        content: [{ type: "paragraph", content: [{ type: "text", text: "Bug description" }] }],
+      });
+      expect(body.labels).toEqual(["urgent", "frontend"]);
+      expect(body.parent).toEqual({ key: "PROJ-50" });
     });
   });
 
@@ -202,24 +212,36 @@ describe("jira tools", () => {
 
     it("should transition issue status", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          data: { transitions: [{ id: "31", name: "In Progress" }, { id: "41", name: "Done" }] },
+        })
+        .mockResolvedValueOnce({ ok: true, status: 204, data: {} });
 
       const result = await handler({ issue_key: "PROJ-1", status: "In Progress" });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("In Progress");
 
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("transition");
-      expect(args).toContain("--key");
-      expect(args).toContain("PROJ-1");
-      expect(args).toContain("--status");
-      expect(args).toContain("In Progress");
-      // transition doesn't use --json
-      expect(args).not.toContain("--json");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-1/transitions", {
+        method: "POST",
+        body: { transition: { id: "31" } },
+      });
+    });
+
+    it("should return error for invalid transition", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        data: { transitions: [{ id: "31", name: "In Progress" }] },
+      });
+
+      const result = await handler({ issue_key: "PROJ-1", status: "Invalid Status" });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("No transition");
+      expect(result.content[0].text).toContain("In Progress");
     });
   });
 
@@ -233,21 +255,22 @@ describe("jira tools", () => {
 
     it("should add comment to issue", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { id: "10001" } });
 
       const result = await handler({ issue_key: "PROJ-1", body: "Test comment" });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("PROJ-1");
 
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("comment");
-      expect(args).toContain("create");
-      expect(args).toContain("--body");
-      expect(args).toContain("Test comment");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-1/comment", {
+        method: "POST",
+        body: {
+          body: {
+            type: "doc",
+            version: 1,
+            content: [{ type: "paragraph", content: [{ type: "text", text: "Test comment" }] }],
+          },
+        },
+      });
     });
   });
 
@@ -259,42 +282,59 @@ describe("jira tools", () => {
       return mockServer.registerTool.mock.calls[5][2];
     }
 
-    it("should assign issue", async () => {
+    it("should assign issue via email lookup", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, data: [{ accountId: "user-789" }] })
+        .mockResolvedValueOnce({ ok: true, status: 204, data: {} });
 
       const result = await handler({ issue_key: "PROJ-1", assignee: "user@example.com" });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("Assigned");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-1/assignee", {
+        method: "PUT",
+        body: { accountId: "user-789" },
+      });
     });
 
     it("should self-assign with @me", async () => {
       const handler = await getHandler();
-      mockExeca.mockResolvedValueOnce({
-        stdout: "",
-        stderr: "",
-        exitCode: 0,
-      } as any);
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, status: 200, data: { accountId: "me-123" } })
+        .mockResolvedValueOnce({ ok: true, status: 204, data: {} });
 
       await handler({ issue_key: "PROJ-1", assignee: "@me" });
-      const args = mockExeca.mock.calls[0][1] as string[];
-      expect(args).toContain("--assignee");
-      expect(args).toContain("@me");
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/myself");
     });
 
-    it("should return error on ENOENT (acli not installed)", async () => {
+    it("should unassign issue", async () => {
       const handler = await getHandler();
-      const err = new Error("ENOENT") as any;
-      err.code = "ENOENT";
-      mockExeca.mockRejectedValueOnce(err);
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 204, data: {} });
+
+      const result = await handler({ issue_key: "PROJ-1", assignee: "unassign" });
+      expect(result.isError).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-1/assignee", {
+        method: "PUT",
+        body: { accountId: null },
+      });
+    });
+
+    it("should return error when user not found", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, data: [] });
+
+      const result = await handler({ issue_key: "PROJ-1", assignee: "nobody@example.com" });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Could not find user");
+    });
+
+    it("should return error on missing env vars", async () => {
+      const handler = await getHandler();
+      mockFetch.mockRejectedValueOnce(new Error("ATLASSIAN_DOMAIN environment variable is required"));
 
       const result = await handler({ issue_key: "PROJ-1", assignee: "@me" });
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("ENOENT");
+      expect(result.content[0].text).toContain("ATLASSIAN_DOMAIN");
     });
   });
 });

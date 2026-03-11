@@ -1,5 +1,5 @@
-/** Atlassian REST API client for Confluence (Basic auth: email + API token).
- *  Jira tools use the `acli` CLI instead — see src/tools/jira.ts. */
+/** Atlassian REST API client (Basic auth: email + API token).
+ *  Used by both Jira and Confluence tools. */
 
 export interface AtlassianConfig {
   domain: string;

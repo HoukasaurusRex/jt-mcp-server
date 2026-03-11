@@ -1,5 +1,4 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { execa } from "execa";
 import {
   JiraSearchSchema,
   JiraGetIssueSchema,
@@ -9,20 +8,9 @@ import {
   JiraAssignSchema,
 } from "../types.js";
 import { textResult, errorResult } from "../lib/tool-result.js";
+import { atlassianFetch } from "../lib/atlassian-client.js";
 
-/** Run an acli command and return stdout. Throws on non-zero exit. */
-async function acli(
-  args: string[],
-  { json = true }: { json?: boolean } = {}
-): Promise<string> {
-  if (json) args.push("--json");
-  const result = await execa("acli", args, { reject: false, timeout: 30000 });
-  if (result.exitCode !== 0) {
-    const output = result.stderr || result.stdout;
-    throw new Error(`acli failed (exit ${result.exitCode}): ${output}`);
-  }
-  return result.stdout;
-}
+// Jira REST API v3 — https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
 export function register(server: McpServer): void {
   // ── jira_search ───────────────────────────────────────────────────
@@ -30,25 +18,23 @@ export function register(server: McpServer): void {
     "jira_search",
     {
       description:
-        "Search Jira issues using JQL via the Atlassian CLI. " +
-        "Requires `acli auth login` to have been run first.",
+        "Search Jira issues using JQL via the Atlassian REST API. " +
+        "Requires ATLASSIAN_DOMAIN, ATLASSIAN_EMAIL, and ATLASSIAN_API_TOKEN env vars.",
       inputSchema: JiraSearchSchema,
     },
     async ({ jql, max_results, fields }) => {
       try {
-        const args = [
-          "jira",
-          "workitem",
-          "search",
-          "--jql",
-          jql,
-          "--limit",
-          String(max_results),
-        ];
-        if (fields) args.push("--fields", fields);
-
-        const stdout = await acli(args);
-        return textResult(stdout);
+        const res = await atlassianFetch<{ issues: unknown[] }>("/rest/api/3/search", {
+          query: {
+            jql,
+            maxResults: max_results,
+            fields,
+          },
+        });
+        if (!res.ok) {
+          return errorResult(`Jira search failed (${res.status}): ${JSON.stringify(res.data)}`);
+        }
+        return textResult(JSON.stringify(res.data.issues ?? res.data, null, 2));
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -60,16 +46,18 @@ export function register(server: McpServer): void {
     "jira_get_issue",
     {
       description:
-        "Get full details of a Jira issue by key via the Atlassian CLI.",
+        "Get full details of a Jira issue by key via the Atlassian REST API.",
       inputSchema: JiraGetIssueSchema,
     },
     async ({ issue_key, fields }) => {
       try {
-        const args = ["jira", "workitem", "view", issue_key];
-        if (fields) args.push("--fields", fields);
-
-        const stdout = await acli(args);
-        return textResult(stdout);
+        const res = await atlassianFetch(`/rest/api/3/issue/${issue_key}`, {
+          query: fields ? { fields } : {},
+        });
+        if (!res.ok) {
+          return errorResult(`Failed to get ${issue_key} (${res.status}): ${JSON.stringify(res.data)}`);
+        }
+        return textResult(JSON.stringify(res.data, null, 2));
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -81,33 +69,56 @@ export function register(server: McpServer): void {
     "jira_create_issue",
     {
       description:
-        "Create a new Jira issue via the Atlassian CLI. " +
+        "Create a new Jira issue via the Atlassian REST API. " +
         "Supports Task, Bug, Story, Epic, and subtask types.",
       inputSchema: JiraCreateIssueSchema,
     },
     async ({ project_key, summary, issue_type, description, assignee, labels, parent_key }) => {
       try {
-        const args = [
-          "jira",
-          "workitem",
-          "create",
-          "--project",
-          project_key,
-          "--summary",
-          summary,
-          "--type",
-          issue_type,
-        ];
-
-        if (description) args.push("--description", description);
-        if (assignee) args.push("--assignee", assignee);
-        if (parent_key) args.push("--parent", parent_key);
-        if (labels && labels.length > 0) {
-          args.push("--label", labels.join(","));
+        // Resolve @me to current user's accountId
+        let assigneeId: string | undefined;
+        if (assignee === "@me") {
+          const me = await atlassianFetch<{ accountId: string }>("/rest/api/3/myself");
+          if (!me.ok) {
+            return errorResult(`Failed to resolve @me (${me.status}): ${JSON.stringify(me.data)}`);
+          }
+          assigneeId = me.data.accountId;
+        } else if (assignee) {
+          // Search for user by email to get accountId
+          const users = await atlassianFetch<Array<{ accountId: string }>>(
+            "/rest/api/3/user/search",
+            { query: { query: assignee } }
+          );
+          if (!users.ok || !Array.isArray(users.data) || users.data.length === 0) {
+            return errorResult(`Could not find user "${assignee}"`);
+          }
+          assigneeId = users.data[0].accountId;
         }
 
-        const stdout = await acli(args);
-        return textResult(stdout);
+        const issueFields: Record<string, unknown> = {
+          project: { key: project_key },
+          summary,
+          issuetype: { name: issue_type },
+        };
+        if (description) {
+          issueFields.description = {
+            type: "doc",
+            version: 1,
+            content: [{ type: "paragraph", content: [{ type: "text", text: description }] }],
+          };
+        }
+        if (assigneeId) issueFields.assignee = { accountId: assigneeId };
+        if (labels && labels.length > 0) issueFields.labels = labels;
+        if (parent_key) issueFields.parent = { key: parent_key };
+
+        const res = await atlassianFetch<{ key: string }>("/rest/api/3/issue", {
+          method: "POST",
+          body: { fields: issueFields },
+        });
+        if (!res.ok) {
+          return errorResult(`Failed to create issue (${res.status}): ${JSON.stringify(res.data)}`);
+        }
+        return textResult(JSON.stringify(res.data, null, 2));
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -119,23 +130,35 @@ export function register(server: McpServer): void {
     "jira_transition",
     {
       description:
-        "Transition a Jira issue to a new status (e.g. 'In Progress', 'Done') via the Atlassian CLI.",
+        "Transition a Jira issue to a new status (e.g. 'In Progress', 'Done') via the Atlassian REST API.",
       inputSchema: JiraTransitionSchema,
     },
     async ({ issue_key, status }) => {
       try {
-        const args = [
-          "jira",
-          "workitem",
-          "transition",
-          "--key",
-          issue_key,
-          "--status",
-          status,
-        ];
+        // First, get available transitions
+        const tRes = await atlassianFetch<{ transitions: Array<{ id: string; name: string }> }>(
+          `/rest/api/3/issue/${issue_key}/transitions`
+        );
+        if (!tRes.ok) {
+          return errorResult(`Failed to get transitions for ${issue_key} (${tRes.status}): ${JSON.stringify(tRes.data)}`);
+        }
 
-        const stdout = await acli(args, { json: false });
-        return textResult(stdout || `Transitioned ${issue_key} → "${status}"`);
+        const match = tRes.data.transitions.find(
+          (t) => t.name.toLowerCase() === status.toLowerCase()
+        );
+        if (!match) {
+          const available = tRes.data.transitions.map((t) => t.name).join(", ");
+          return errorResult(`No transition "${status}" for ${issue_key}. Available: ${available}`);
+        }
+
+        const res = await atlassianFetch(`/rest/api/3/issue/${issue_key}/transitions`, {
+          method: "POST",
+          body: { transition: { id: match.id } },
+        });
+        if (!res.ok) {
+          return errorResult(`Failed to transition ${issue_key} (${res.status}): ${JSON.stringify(res.data)}`);
+        }
+        return textResult(`Transitioned ${issue_key} → "${status}"`);
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -146,24 +169,25 @@ export function register(server: McpServer): void {
   server.registerTool(
     "jira_add_comment",
     {
-      description: "Add a comment to a Jira issue via the Atlassian CLI.",
+      description: "Add a comment to a Jira issue via the Atlassian REST API.",
       inputSchema: JiraAddCommentSchema,
     },
     async ({ issue_key, body }) => {
       try {
-        const args = [
-          "jira",
-          "workitem",
-          "comment",
-          "create",
-          "--key",
-          issue_key,
-          "--body",
-          body,
-        ];
-
-        const stdout = await acli(args, { json: false });
-        return textResult(stdout || `Comment added to ${issue_key}`);
+        const res = await atlassianFetch(`/rest/api/3/issue/${issue_key}/comment`, {
+          method: "POST",
+          body: {
+            body: {
+              type: "doc",
+              version: 1,
+              content: [{ type: "paragraph", content: [{ type: "text", text: body }] }],
+            },
+          },
+        });
+        if (!res.ok) {
+          return errorResult(`Failed to comment on ${issue_key} (${res.status}): ${JSON.stringify(res.data)}`);
+        }
+        return textResult(`Comment added to ${issue_key}`);
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
@@ -175,26 +199,41 @@ export function register(server: McpServer): void {
     "jira_assign",
     {
       description:
-        "Assign or unassign a Jira issue via the Atlassian CLI. " +
+        "Assign or unassign a Jira issue via the Atlassian REST API. " +
         "Use '@me' for self-assign or an email address.",
       inputSchema: JiraAssignSchema,
     },
     async ({ issue_key, assignee }) => {
       try {
-        const args = [
-          "jira",
-          "workitem",
-          "assign",
-          "--key",
-          issue_key,
-          "--assignee",
-          assignee,
-        ];
+        let accountId: string | null;
 
-        const stdout = await acli(args, { json: false });
-        return textResult(
-          stdout || `Assigned ${issue_key} to ${assignee}`
-        );
+        if (assignee === "unassign") {
+          accountId = null;
+        } else if (assignee === "@me") {
+          const me = await atlassianFetch<{ accountId: string }>("/rest/api/3/myself");
+          if (!me.ok) {
+            return errorResult(`Failed to resolve @me (${me.status}): ${JSON.stringify(me.data)}`);
+          }
+          accountId = me.data.accountId;
+        } else {
+          const users = await atlassianFetch<Array<{ accountId: string }>>(
+            "/rest/api/3/user/search",
+            { query: { query: assignee } }
+          );
+          if (!users.ok || !Array.isArray(users.data) || users.data.length === 0) {
+            return errorResult(`Could not find user "${assignee}"`);
+          }
+          accountId = users.data[0].accountId;
+        }
+
+        const res = await atlassianFetch(`/rest/api/3/issue/${issue_key}/assignee`, {
+          method: "PUT",
+          body: { accountId },
+        });
+        if (!res.ok) {
+          return errorResult(`Failed to assign ${issue_key} (${res.status}): ${JSON.stringify(res.data)}`);
+        }
+        return textResult(`Assigned ${issue_key} to ${assignee}`);
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
       }
