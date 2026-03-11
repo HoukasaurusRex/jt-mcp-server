@@ -734,3 +734,36 @@ export const MemorySuggestToolsSchema = z.object({
     .describe("Maximum number of suggestions to return (default 10)"),
 });
 export type MemorySuggestToolsInput = z.infer<typeof MemorySuggestToolsSchema>;
+
+// === journal tools ===
+export const JournalLogSchema = z.object({
+  since: z
+    .string()
+    .optional()
+    .describe(
+      "Start of time period for git log (e.g. '8 hours ago', '2026-03-11', 'yesterday'). Default: today midnight"
+    ),
+  until: z
+    .string()
+    .optional()
+    .describe("End of time period for git log (e.g. 'now', '2026-03-11 18:00'). Default: now"),
+  repos: z
+    .array(z.string())
+    .optional()
+    .describe(
+      "Absolute paths to git repos to scan. Default: common workspace repos under ~/code/"
+    ),
+  journal_dir: z
+    .string()
+    .default(`${process.env.HOME}/code/jt.houk.space/content/journal`)
+    .describe("Absolute path to the journal directory"),
+  date: z
+    .string()
+    .optional()
+    .describe("Date for the journal entry in YYYY-MM-DD format (default: today)"),
+  dry_run: z
+    .boolean()
+    .default(false)
+    .describe("If true, return the line without appending to the file"),
+});
+export type JournalLogInput = z.infer<typeof JournalLogSchema>;
