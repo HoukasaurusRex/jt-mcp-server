@@ -9,9 +9,17 @@ import {
 } from "../types.js";
 import { textResult, errorResult } from "../lib/tool-result.js";
 
-function getGraphqlClient() {
-  const token = process.env.GITHUB_TOKEN;
-  if (!token) throw new Error("GITHUB_TOKEN environment variable is required");
+async function getToken(): Promise<string> {
+  const envToken = process.env.GITHUB_TOKEN;
+  if (envToken) return envToken;
+  const { stdout } = await execa("gh", ["auth", "token"]);
+  const token = stdout.trim();
+  if (!token) throw new Error("No GITHUB_TOKEN env var and `gh auth token` returned empty");
+  return token;
+}
+
+async function getGraphqlClient() {
+  const token = await getToken();
   return graphql.defaults({ headers: { authorization: `token ${token}` } });
 }
 
@@ -24,7 +32,7 @@ export function register(server: McpServer): void {
     },
     async ({ project_id, status_field_id, todo_option_id }) => {
       try {
-        const gql = getGraphqlClient();
+        const gql = await getGraphqlClient();
         const result = await gql<{
           node: {
             items: {
@@ -106,7 +114,7 @@ export function register(server: McpServer): void {
     },
     async ({ project_id, item_id, status_field_id, status_option_id }) => {
       try {
-        const gql = getGraphqlClient();
+        const gql = await getGraphqlClient();
         await gql(
           `mutation ($input: UpdateProjectV2ItemFieldValueInput!) {
             updateProjectV2ItemFieldValue(input: $input) {
@@ -142,7 +150,7 @@ export function register(server: McpServer): void {
         if (repo) closeArgs.push("--repo", repo);
         await execa("gh", closeArgs);
 
-        const gql = getGraphqlClient();
+        const gql = await getGraphqlClient();
         await gql(
           `mutation ($input: UpdateProjectV2ItemFieldValueInput!) {
             updateProjectV2ItemFieldValue(input: $input) {
