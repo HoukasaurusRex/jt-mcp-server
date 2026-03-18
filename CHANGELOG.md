@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.5.0...v1.6.0) (2026-03-11)
+
+
+### Features
+
+* add journal_log tool for standup-style daily work summaries ([8e68414](https://github.com/HoukasaurusRex/jt-mcp-server/commit/8e684145fc2e18a2b7c17e1bdad41a1e03634ad5))
+
 # [1.5.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.4.0...v1.5.0) (2026-03-11)
 
 
