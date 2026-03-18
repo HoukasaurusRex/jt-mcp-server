@@ -20,6 +20,7 @@ import { register as registerJira } from "./tools/jira.js";
 import { register as registerConfluence } from "./tools/confluence.js";
 import { register as registerMemory } from "./tools/memory.js";
 import { register as registerJournal } from "./tools/journal.js";
+import { register as registerStrategy } from "./tools/strategy.js";
 
 const server = new McpServer({
   name: "@houkasaurusrex/jt-mcp-server",
@@ -44,6 +45,7 @@ const toolGroups: [string, (s: typeof server) => void][] = [
   ["confluence", registerConfluence],
   ["memory", registerMemory],
   ["journal", registerJournal],
+  ["strategy", registerStrategy],
 ];
 
 for (const [name, register] of toolGroups) {

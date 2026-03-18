@@ -735,6 +735,26 @@ export const MemorySuggestToolsSchema = z.object({
 });
 export type MemorySuggestToolsInput = z.infer<typeof MemorySuggestToolsSchema>;
 
+// === strategy tools ===
+export const StrategyExpandSchema = z.object({
+  command: z
+    .string()
+    .describe("Short command to expand (e.g. 'review pr feature/my-branch')"),
+  strategies_dir: z
+    .string()
+    .default(`${process.env.HOME}/.jt-strategies`)
+    .describe("Directory containing strategy .md files"),
+});
+export type StrategyExpandInput = z.infer<typeof StrategyExpandSchema>;
+
+export const StrategyListSchema = z.object({
+  strategies_dir: z
+    .string()
+    .default(`${process.env.HOME}/.jt-strategies`)
+    .describe("Directory containing strategy .md files"),
+});
+export type StrategyListInput = z.infer<typeof StrategyListSchema>;
+
 // === journal tools ===
 export const JournalLogSchema = z.object({
   since: z
