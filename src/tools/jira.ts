@@ -7,8 +7,8 @@ import {
   JiraAddCommentSchema,
   JiraAssignSchema,
 } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
-import { atlassianFetch } from "../lib/atlassian-client.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { atlassianFetch, toAdfParagraph, resolveAssignee } from "../lib/atlassian-client.js";
 
 // Jira REST API v3 — https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
@@ -36,7 +36,7 @@ export function register(server: McpServer): void {
         }
         return textResult(JSON.stringify(res.data.issues ?? res.data, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -59,7 +59,7 @@ export function register(server: McpServer): void {
         }
         return textResult(JSON.stringify(res.data, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -75,24 +75,11 @@ export function register(server: McpServer): void {
     },
     async ({ project_key, summary, issue_type, description, assignee, labels, parent_key }) => {
       try {
-        // Resolve @me to current user's accountId
         let assigneeId: string | undefined;
-        if (assignee === "@me") {
-          const me = await atlassianFetch<{ accountId: string }>("/rest/api/3/myself");
-          if (!me.ok) {
-            return errorResult(`Failed to resolve @me (${me.status}): ${JSON.stringify(me.data)}`);
-          }
-          assigneeId = me.data.accountId;
-        } else if (assignee) {
-          // Search for user by email to get accountId
-          const users = await atlassianFetch<Array<{ accountId: string }>>(
-            "/rest/api/3/user/search",
-            { query: { query: assignee } }
-          );
-          if (!users.ok || !Array.isArray(users.data) || users.data.length === 0) {
-            return errorResult(`Could not find user "${assignee}"`);
-          }
-          assigneeId = users.data[0].accountId;
+        if (assignee) {
+          const resolved = await resolveAssignee(assignee);
+          if (resolved.error) return errorResult(resolved.error);
+          assigneeId = resolved.accountId ?? undefined;
         }
 
         const issueFields: Record<string, unknown> = {
@@ -101,11 +88,7 @@ export function register(server: McpServer): void {
           issuetype: { name: issue_type },
         };
         if (description) {
-          issueFields.description = {
-            type: "doc",
-            version: 1,
-            content: [{ type: "paragraph", content: [{ type: "text", text: description }] }],
-          };
+          issueFields.description = toAdfParagraph(description);
         }
         if (assigneeId) issueFields.assignee = { accountId: assigneeId };
         if (labels && labels.length > 0) issueFields.labels = labels;
@@ -120,7 +103,7 @@ export function register(server: McpServer): void {
         }
         return textResult(JSON.stringify(res.data, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -160,7 +143,7 @@ export function register(server: McpServer): void {
         }
         return textResult(`Transitioned ${issue_key} → "${status}"`);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -177,11 +160,7 @@ export function register(server: McpServer): void {
         const res = await atlassianFetch(`/rest/api/3/issue/${issue_key}/comment`, {
           method: "POST",
           body: {
-            body: {
-              type: "doc",
-              version: 1,
-              content: [{ type: "paragraph", content: [{ type: "text", text: body }] }],
-            },
+            body: toAdfParagraph(body),
           },
         });
         if (!res.ok) {
@@ -189,7 +168,7 @@ export function register(server: McpServer): void {
         }
         return textResult(`Comment added to ${issue_key}`);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -205,26 +184,9 @@ export function register(server: McpServer): void {
     },
     async ({ issue_key, assignee }) => {
       try {
-        let accountId: string | null;
-
-        if (assignee === "unassign") {
-          accountId = null;
-        } else if (assignee === "@me") {
-          const me = await atlassianFetch<{ accountId: string }>("/rest/api/3/myself");
-          if (!me.ok) {
-            return errorResult(`Failed to resolve @me (${me.status}): ${JSON.stringify(me.data)}`);
-          }
-          accountId = me.data.accountId;
-        } else {
-          const users = await atlassianFetch<Array<{ accountId: string }>>(
-            "/rest/api/3/user/search",
-            { query: { query: assignee } }
-          );
-          if (!users.ok || !Array.isArray(users.data) || users.data.length === 0) {
-            return errorResult(`Could not find user "${assignee}"`);
-          }
-          accountId = users.data[0].accountId;
-        }
+        const resolved = await resolveAssignee(assignee);
+        if (resolved.error) return errorResult(resolved.error);
+        const accountId = resolved.accountId;
 
         const res = await atlassianFetch(`/rest/api/3/issue/${issue_key}/assignee`, {
           method: "PUT",
@@ -235,7 +197,7 @@ export function register(server: McpServer): void {
         }
         return textResult(`Assigned ${issue_key} to ${assignee}`);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

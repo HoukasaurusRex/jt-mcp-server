@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { execa } from "execa";
 import { GitConventionalCommitSchema } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 
 const STRICT_RE = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+/;
 const RELAXED_RE = /^\w+(\(.+\))?!?: .+/;
@@ -49,7 +49,7 @@ export function register(server: McpServer): void {
 
         return textResult(`Committed: ${message}\nFiles: ${staged.trim()}`);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

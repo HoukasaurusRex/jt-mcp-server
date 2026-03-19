@@ -7,7 +7,7 @@ import {
   NetlifyListDeploysSchema,
   NetlifyListFunctionsSchema,
 } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 
 /** Call `netlify api <operation>` and return parsed JSON. */
 async function netlifyApi<T = unknown>(
@@ -75,7 +75,7 @@ export function register(server: McpServer): void {
 
         return textResult(JSON.stringify(summary, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -156,7 +156,7 @@ export function register(server: McpServer): void {
 
         return textResult(output.join("\n"));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -249,7 +249,7 @@ export function register(server: McpServer): void {
 
         return textResult(JSON.stringify(summary, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -289,7 +289,7 @@ export function register(server: McpServer): void {
 
         return textResult(JSON.stringify(summary, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

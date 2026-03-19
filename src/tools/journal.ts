@@ -3,7 +3,7 @@ import { execa } from "execa";
 import { readFile, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { JournalLogSchema } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 
 const HOME = process.env.HOME ?? "/tmp";
 
@@ -138,7 +138,7 @@ export function register(server: McpServer): void {
 
         return textResult(`Appended to ${targetPath}:\n${line}`);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

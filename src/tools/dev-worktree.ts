@@ -3,7 +3,7 @@ import { execa } from "execa";
 import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { DevWorktreeSchema } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 import { resolveNodeBinPath } from "../lib/nvm-utils.js";
 
 function worktreePath(branch: string): string {
@@ -115,7 +115,7 @@ export function register(server: McpServer): void {
           }
         }
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

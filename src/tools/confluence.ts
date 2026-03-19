@@ -5,7 +5,7 @@ import {
   ConfluenceCreatePageSchema,
   ConfluenceUpdatePageSchema,
 } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 import { atlassianFetch } from "../lib/atlassian-client.js";
 
 export function register(server: McpServer): void {
@@ -62,7 +62,7 @@ export function register(server: McpServer): void {
           )
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -114,7 +114,7 @@ export function register(server: McpServer): void {
           )
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -166,7 +166,7 @@ export function register(server: McpServer): void {
           )
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -240,7 +240,7 @@ export function register(server: McpServer): void {
           )
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

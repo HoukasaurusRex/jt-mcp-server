@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StrategyExpandSchema, StrategyListSchema } from "../types.js";
 import type { StrategyExpandInput, StrategyListInput } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 import {
   loadStrategies,
   matchStrategy,
@@ -52,9 +52,7 @@ export function register(server: McpServer): void {
         const expanded = expandTemplate(result.strategy.body, result.values);
         return textResult(expanded);
       } catch (err) {
-        return errorResult(
-          err instanceof Error ? err.message : String(err)
-        );
+        return catchToolError(err);
       }
     }
   );
@@ -95,9 +93,7 @@ export function register(server: McpServer): void {
 
         return textResult(output);
       } catch (err) {
-        return errorResult(
-          err instanceof Error ? err.message : String(err)
-        );
+        return catchToolError(err);
       }
     }
   );

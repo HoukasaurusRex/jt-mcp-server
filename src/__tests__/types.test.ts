@@ -1,74 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
-  DevPortSchema,
-  DevServeSchema,
-  DevServeStopSchema,
-  DevRunSchema,
   DevWorktreeSchema,
   DevVisualRegressionSchema,
   GitHubProjectCompleteIssueSchema,
   GitConventionalCommitSchema,
   NetlifyDeployStatusSchema,
-  ShellLintSchema,
 } from "../types.js";
 
 describe("Zod schemas", () => {
-  it("DevPortSchema validates correct input", () => {
-    const result = DevPortSchema.safeParse({ port: 3000, action: "check" });
-    expect(result.success).toBe(true);
-  });
-
-  it("DevPortSchema rejects invalid port", () => {
-    const result = DevPortSchema.safeParse({ port: -1, action: "check" });
-    expect(result.success).toBe(false);
-  });
-
-  it("DevPortSchema rejects invalid action", () => {
-    const result = DevPortSchema.safeParse({ port: 3000, action: "restart" });
-    expect(result.success).toBe(false);
-  });
-
-  it("DevServeSchema validates with defaults", () => {
-    const result = DevServeSchema.safeParse({ directory: "/tmp/build" });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.port).toBe(3000);
-      expect(result.data.startup_timeout).toBe(10000);
-    }
-  });
-
-  it("DevServeStopSchema validates", () => {
-    const result = DevServeStopSchema.safeParse({ port: 8080 });
-    expect(result.success).toBe(true);
-  });
-
-  it("DevRunSchema validates minimal input with defaults", () => {
-    const result = DevRunSchema.safeParse({ command: "echo hello" });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.timeout).toBe(300000);
-    }
-  });
-
-  it("DevRunSchema validates full input with custom timeout", () => {
-    const result = DevRunSchema.safeParse({
-      command: "yarn build",
-      node_version: "20",
-      cwd: "/tmp",
-      env: { NODE_ENV: "production" },
-      timeout: 60000,
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("DevRunSchema rejects timeout exceeding max", () => {
-    const result = DevRunSchema.safeParse({
-      command: "echo hi",
-      timeout: 999999,
-    });
-    expect(result.success).toBe(false);
-  });
-
   it("DevWorktreeSchema validates create action", () => {
     const result = DevWorktreeSchema.safeParse({
       branch: "feature/test",
@@ -125,21 +64,5 @@ describe("Zod schemas", () => {
       site_name: "my-site",
     });
     expect(result.success).toBe(true);
-  });
-
-  it("ShellLintSchema validates with defaults", () => {
-    const result = ShellLintSchema.safeParse({
-      files: ["/tmp/script.sh"],
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.shell).toBe("bash");
-      expect(result.data.severity).toBe("style");
-    }
-  });
-
-  it("ShellLintSchema rejects empty files array", () => {
-    const result = ShellLintSchema.safeParse({ files: [] });
-    expect(result.success).toBe(false);
   });
 });

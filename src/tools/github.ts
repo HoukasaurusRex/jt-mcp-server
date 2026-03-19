@@ -7,20 +7,29 @@ import {
   GitHubProjectCompleteIssueSchema,
   GitHubCreatePRSchema,
 } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import type {
+  GitHubProjectNextIssueInput,
+  GitHubProjectSetStatusInput,
+  GitHubProjectCompleteIssueInput,
+  GitHubCreatePRInput,
+} from "../types.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 
-async function getToken(): Promise<string> {
-  const envToken = process.env.GITHUB_TOKEN;
-  if (envToken) return envToken;
-  const { stdout } = await execa("gh", ["auth", "token"]);
-  const token = stdout.trim();
-  if (!token) throw new Error("No GITHUB_TOKEN env var and `gh auth token` returned empty");
-  return token;
-}
+let _gqlClient: ReturnType<typeof graphql.defaults> | null = null;
 
 async function getGraphqlClient() {
-  const token = await getToken();
-  return graphql.defaults({ headers: { authorization: `token ${token}` } });
+  if (_gqlClient) return _gqlClient;
+  const envToken = process.env.GITHUB_TOKEN;
+  let token: string;
+  if (envToken) {
+    token = envToken;
+  } else {
+    const { stdout } = await execa("gh", ["auth", "token"]);
+    token = stdout.trim();
+    if (!token) throw new Error("No GITHUB_TOKEN env var and `gh auth token` returned empty");
+  }
+  _gqlClient = graphql.defaults({ headers: { authorization: `token ${token}` } });
+  return _gqlClient;
 }
 
 export function register(server: McpServer): void {
@@ -30,7 +39,7 @@ export function register(server: McpServer): void {
       description: "Get the oldest open Todo issue from a GitHub ProjectV2 board",
       inputSchema: GitHubProjectNextIssueSchema,
     },
-    async ({ project_id, status_field_id, todo_option_id }) => {
+    async ({ project_id, status_field_id, todo_option_id }: GitHubProjectNextIssueInput) => {
       try {
         const gql = await getGraphqlClient();
         const result = await gql<{
@@ -101,7 +110,7 @@ export function register(server: McpServer): void {
           )
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -112,7 +121,7 @@ export function register(server: McpServer): void {
       description: "Update the status of a GitHub ProjectV2 item (Todo, In Progress, Done)",
       inputSchema: GitHubProjectSetStatusSchema,
     },
-    async ({ project_id, item_id, status_field_id, status_option_id }) => {
+    async ({ project_id, item_id, status_field_id, status_option_id }: GitHubProjectSetStatusInput) => {
       try {
         const gql = await getGraphqlClient();
         await gql(
@@ -133,7 +142,7 @@ export function register(server: McpServer): void {
 
         return textResult(`Updated item ${item_id} status to ${status_option_id}`);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -144,7 +153,7 @@ export function register(server: McpServer): void {
       description: "Close a GitHub issue and set its project board status to Done in one call",
       inputSchema: GitHubProjectCompleteIssueSchema,
     },
-    async ({ issue_number, repo, item_id, project_id, status_field_id, done_option_id }) => {
+    async ({ issue_number, repo, item_id, project_id, status_field_id, done_option_id }: GitHubProjectCompleteIssueInput) => {
       try {
         const closeArgs = ["issue", "close", String(issue_number)];
         if (repo) closeArgs.push("--repo", repo);
@@ -171,7 +180,7 @@ export function register(server: McpServer): void {
           `Closed issue #${issue_number} and set project item ${item_id} to Done`
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -182,7 +191,7 @@ export function register(server: McpServer): void {
       description: "Create a GitHub pull request using the gh CLI",
       inputSchema: GitHubCreatePRSchema,
     },
-    async ({ title, body, base, head, draft }) => {
+    async ({ title, body, base, head, draft }: GitHubCreatePRInput) => {
       try {
         const args = ["pr", "create", "--title", title, "--base", base];
         if (body) args.push("--body", body);
@@ -192,7 +201,7 @@ export function register(server: McpServer): void {
         const result = await execa("gh", args);
         return textResult(result.stdout);
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

@@ -1,62 +1,5 @@
 import { z } from "zod";
 
-// === dev_port ===
-export const DevPortSchema = z.object({
-  port: z.number().int().min(1).max(65535).describe("Port number"),
-  action: z
-    .enum(["check", "kill", "wait_ready"])
-    .describe(
-      "check: return PID using port; kill: terminate process on port; wait_ready: poll until port accepts connections"
-    ),
-  timeout: z
-    .number()
-    .int()
-    .positive()
-    .default(10000)
-    .describe("Timeout in ms for wait_ready (default 10000)"),
-});
-export type DevPortInput = z.infer<typeof DevPortSchema>;
-
-// === dev_serve ===
-export const DevServeSchema = z.object({
-  directory: z.string().describe("Absolute path to directory to serve"),
-  port: z.number().int().min(1).max(65535).default(3000).describe("Port to serve on (default 3000)"),
-  startup_timeout: z
-    .number()
-    .int()
-    .positive()
-    .default(10000)
-    .describe("Max ms to wait for the server to respond (default 10000)"),
-});
-export type DevServeInput = z.infer<typeof DevServeSchema>;
-
-export const DevServeStopSchema = z.object({
-  port: z.number().int().min(1).max(65535).describe("Port of the server to stop"),
-});
-export type DevServeStopInput = z.infer<typeof DevServeStopSchema>;
-
-// === dev_run ===
-export const DevRunSchema = z.object({
-  command: z.string().describe("Shell command to execute"),
-  node_version: z
-    .string()
-    .optional()
-    .describe("Node version to use via nvm (e.g. '20', '22')"),
-  cwd: z.string().optional().describe("Working directory for the command"),
-  env: z
-    .record(z.string(), z.string())
-    .optional()
-    .describe("Additional environment variables"),
-  timeout: z
-    .number()
-    .int()
-    .positive()
-    .max(600000)
-    .default(300000)
-    .describe("Timeout in ms (default 300000 = 5 min, max 600000 = 10 min)"),
-});
-export type DevRunInput = z.infer<typeof DevRunSchema>;
-
 // === dev_worktree ===
 export const DevWorktreeSchema = z.object({
   branch: z.string().describe("Git branch name"),
@@ -111,72 +54,6 @@ export const DevVisualRegressionSchema = z.object({
     .describe("Max ms to wait for serve to respond (default 15000)"),
 });
 export type DevVisualRegressionInput = z.infer<typeof DevVisualRegressionSchema>;
-
-// === dev_install ===
-export const DevInstallSchema = z.object({
-  cwd: z.string().describe("Absolute path to the project directory"),
-  frozen: z
-    .boolean()
-    .default(false)
-    .describe("Use frozen/immutable lockfile (CI mode)"),
-  node_version: z
-    .string()
-    .optional()
-    .describe("Node version to use via nvm (e.g. '20', '22')"),
-  timeout: z
-    .number()
-    .int()
-    .positive()
-    .max(600000)
-    .default(300000)
-    .describe("Timeout in ms (default 300000 = 5 min)"),
-});
-export type DevInstallInput = z.infer<typeof DevInstallSchema>;
-
-// === dev_script ===
-export const DevScriptSchema = z.object({
-  script: z.string().describe("Package.json script name to run (e.g. 'build', 'test', 'lint')"),
-  args: z.string().optional().describe("Additional arguments to pass to the script"),
-  cwd: z.string().optional().describe("Project directory (default: process cwd)"),
-  node_version: z
-    .string()
-    .optional()
-    .describe("Node version to use via nvm (e.g. '20', '22')"),
-  timeout: z
-    .number()
-    .int()
-    .positive()
-    .max(600000)
-    .default(300000)
-    .describe("Timeout in ms (default 300000 = 5 min)"),
-});
-export type DevScriptInput = z.infer<typeof DevScriptSchema>;
-
-// === dev_deps ===
-export const DevDepsSchema = z.object({
-  action: z.enum(["add", "remove"]).describe("Whether to add or remove packages"),
-  packages: z
-    .array(z.string())
-    .min(1)
-    .describe("Package names with optional version specifiers (e.g. 'zod', 'vitest@^1.0.0')"),
-  dev: z
-    .boolean()
-    .default(false)
-    .describe("Add as devDependency (ignored for remove)"),
-  cwd: z.string().optional().describe("Project directory (default: process cwd)"),
-  node_version: z
-    .string()
-    .optional()
-    .describe("Node version to use via nvm (e.g. '20', '22')"),
-  timeout: z
-    .number()
-    .int()
-    .positive()
-    .max(600000)
-    .default(300000)
-    .describe("Timeout in ms (default 300000 = 5 min)"),
-});
-export type DevDepsInput = z.infer<typeof DevDepsSchema>;
 
 // === github tools ===
 export const GitHubProjectNextIssueSchema = z.object({
@@ -311,20 +188,6 @@ export const NetlifyListFunctionsSchema = z.object({
   site_name: z.string().describe("Netlify site name or ID"),
 });
 export type NetlifyListFunctionsInput = z.infer<typeof NetlifyListFunctionsSchema>;
-
-// === shell tools ===
-export const ShellLintSchema = z.object({
-  files: z.array(z.string()).min(1).describe("Paths to shell files to lint"),
-  shell: z
-    .enum(["bash", "sh", "zsh", "dash"])
-    .default("bash")
-    .describe("Shell dialect (default: bash)"),
-  severity: z
-    .enum(["error", "warning", "info", "style"])
-    .default("style")
-    .describe("Minimum severity to report (default: style)"),
-});
-export type ShellLintInput = z.infer<typeof ShellLintSchema>;
 
 // === search tools ===
 export const DevGrepSchema = z.object({

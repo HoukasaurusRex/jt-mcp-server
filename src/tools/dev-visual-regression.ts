@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { execa } from "execa";
 import { DevVisualRegressionSchema } from "../types.js";
 import { killPort, waitForPort } from "../lib/port-utils.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 
 async function serveDir(dir: string, port: number, timeout: number): Promise<{ kill: () => void }> {
   await killPort(port);
@@ -81,7 +81,7 @@ export function register(server: McpServer): void {
       } catch (err) {
         if (child) child.kill();
         await killPort(port);
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );

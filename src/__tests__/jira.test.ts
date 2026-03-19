@@ -6,11 +6,19 @@ vi.mock("../lib/atlassian-client.js", () => ({
     domain: "test.atlassian.net",
     email: "test@example.com",
     token: "fake-token",
+    authHeader: "Basic dGVzdDpmYWtl",
+  })),
+  resolveAssignee: vi.fn(),
+  toAdfParagraph: vi.fn((text: string) => ({
+    type: "doc",
+    version: 1,
+    content: [{ type: "paragraph", content: [{ type: "text", text }] }],
   })),
 }));
 
-import { atlassianFetch } from "../lib/atlassian-client.js";
+import { atlassianFetch, resolveAssignee } from "../lib/atlassian-client.js";
 const mockFetch = vi.mocked(atlassianFetch);
+const mockResolveAssignee = vi.mocked(resolveAssignee);
 
 describe("jira tools", () => {
   beforeEach(() => {
@@ -144,9 +152,8 @@ describe("jira tools", () => {
 
     it("should resolve @me assignee", async () => {
       const handler = await getHandler();
-      mockFetch
-        .mockResolvedValueOnce({ ok: true, status: 200, data: { accountId: "me-123" } })
-        .mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-100" } });
+      mockResolveAssignee.mockResolvedValueOnce({ accountId: "me-123" });
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-100" } });
 
       await handler({
         project_key: "PROJ",
@@ -155,16 +162,15 @@ describe("jira tools", () => {
         assignee: "@me",
       });
 
-      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/myself");
-      const createCall = mockFetch.mock.calls[1];
+      expect(mockResolveAssignee).toHaveBeenCalledWith("@me");
+      const createCall = mockFetch.mock.calls[0];
       expect((createCall[1] as any).body.fields.assignee).toEqual({ accountId: "me-123" });
     });
 
     it("should resolve email assignee via user search", async () => {
       const handler = await getHandler();
-      mockFetch
-        .mockResolvedValueOnce({ ok: true, status: 200, data: [{ accountId: "user-456" }] })
-        .mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-101" } });
+      mockResolveAssignee.mockResolvedValueOnce({ accountId: "user-456" });
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-101" } });
 
       await handler({
         project_key: "PROJ",
@@ -173,9 +179,7 @@ describe("jira tools", () => {
         assignee: "user@example.com",
       });
 
-      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/user/search", {
-        query: { query: "user@example.com" },
-      });
+      expect(mockResolveAssignee).toHaveBeenCalledWith("user@example.com");
     });
 
     it("should pass optional fields", async () => {
@@ -284,13 +288,13 @@ describe("jira tools", () => {
 
     it("should assign issue via email lookup", async () => {
       const handler = await getHandler();
-      mockFetch
-        .mockResolvedValueOnce({ ok: true, status: 200, data: [{ accountId: "user-789" }] })
-        .mockResolvedValueOnce({ ok: true, status: 204, data: {} });
+      mockResolveAssignee.mockResolvedValueOnce({ accountId: "user-789" });
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 204, data: {} });
 
       const result = await handler({ issue_key: "PROJ-1", assignee: "user@example.com" });
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toContain("Assigned");
+      expect(mockResolveAssignee).toHaveBeenCalledWith("user@example.com");
       expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/issue/PROJ-1/assignee", {
         method: "PUT",
         body: { accountId: "user-789" },
@@ -299,16 +303,16 @@ describe("jira tools", () => {
 
     it("should self-assign with @me", async () => {
       const handler = await getHandler();
-      mockFetch
-        .mockResolvedValueOnce({ ok: true, status: 200, data: { accountId: "me-123" } })
-        .mockResolvedValueOnce({ ok: true, status: 204, data: {} });
+      mockResolveAssignee.mockResolvedValueOnce({ accountId: "me-123" });
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 204, data: {} });
 
       await handler({ issue_key: "PROJ-1", assignee: "@me" });
-      expect(mockFetch).toHaveBeenCalledWith("/rest/api/3/myself");
+      expect(mockResolveAssignee).toHaveBeenCalledWith("@me");
     });
 
     it("should unassign issue", async () => {
       const handler = await getHandler();
+      mockResolveAssignee.mockResolvedValueOnce({ accountId: null });
       mockFetch.mockResolvedValueOnce({ ok: true, status: 204, data: {} });
 
       const result = await handler({ issue_key: "PROJ-1", assignee: "unassign" });
@@ -321,7 +325,7 @@ describe("jira tools", () => {
 
     it("should return error when user not found", async () => {
       const handler = await getHandler();
-      mockFetch.mockResolvedValueOnce({ ok: true, status: 200, data: [] });
+      mockResolveAssignee.mockResolvedValueOnce({ accountId: null, error: 'Could not find user "nobody@example.com"' });
 
       const result = await handler({ issue_key: "PROJ-1", assignee: "nobody@example.com" });
       expect(result.isError).toBe(true);
@@ -330,7 +334,7 @@ describe("jira tools", () => {
 
     it("should return error on missing env vars", async () => {
       const handler = await getHandler();
-      mockFetch.mockRejectedValueOnce(new Error("ATLASSIAN_DOMAIN environment variable is required"));
+      mockResolveAssignee.mockRejectedValueOnce(new Error("ATLASSIAN_DOMAIN environment variable is required"));
 
       const result = await handler({ issue_key: "PROJ-1", assignee: "@me" });
       expect(result.isError).toBe(true);

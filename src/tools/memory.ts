@@ -21,7 +21,7 @@ import type {
   MemoryTrackActionInput,
   MemorySuggestToolsInput,
 } from "../types.js";
-import { textResult, errorResult } from "../lib/tool-result.js";
+import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 
 interface EntityRow {
   name: string;
@@ -73,7 +73,7 @@ export function register(server: McpServer): void {
           `Created ${created} new entities (${entities.length - created} already existed).`
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -125,7 +125,7 @@ export function register(server: McpServer): void {
           `Created ${created} new relations (${relations.length - created} already existed).`
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -167,7 +167,7 @@ export function register(server: McpServer): void {
           `Added ${added} new observations to "${entity}" (${observations.length - added} duplicates skipped).`
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -285,7 +285,7 @@ export function register(server: McpServer): void {
           )
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -348,7 +348,7 @@ export function register(server: McpServer): void {
         autoExport(db);
         return textResult(summary.join(" "));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -367,7 +367,7 @@ export function register(server: McpServer): void {
         const data = exportGraph(db);
         return textResult(JSON.stringify(data, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -418,7 +418,7 @@ export function register(server: McpServer): void {
           `Imported ${data.entities.length} entities and ${data.relations.length} relations (mode: ${merge ? "merge" : "replace"}).`
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -450,7 +450,7 @@ export function register(server: McpServer): void {
           `Tracked action "${command}" (total occurrences: ${row.count}).`
         );
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
@@ -536,7 +536,7 @@ export function register(server: McpServer): void {
         const result = { exact_matches: exactMatches, tag_patterns: tagPatterns };
         return textResult(JSON.stringify(result, null, 2));
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        return catchToolError(err);
       }
     }
   );
