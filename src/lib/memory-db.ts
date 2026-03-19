@@ -49,7 +49,62 @@ CREATE TABLE IF NOT EXISTS tracked_actions (
 CREATE INDEX IF NOT EXISTS idx_tracked_actions_command ON tracked_actions(command);
 CREATE INDEX IF NOT EXISTS idx_tracked_actions_project ON tracked_actions(project);
 CREATE INDEX IF NOT EXISTS idx_tracked_actions_category ON tracked_actions(category);
+
+CREATE TABLE IF NOT EXISTS embeddings (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_type TEXT NOT NULL,
+  target_id   TEXT NOT NULL,
+  embedding   TEXT NOT NULL,
+  model       TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(target_type, target_id, model)
+);
+
+CREATE TABLE IF NOT EXISTS event_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_type TEXT NOT NULL,
+  payload    TEXT NOT NULL,
+  session_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+  id         TEXT PRIMARY KEY,
+  project    TEXT,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  ended_at   TEXT,
+  summary    TEXT
+);
 `;
+
+/** Idempotent ALTER TABLE migrations for existing databases. */
+const MIGRATIONS: string[] = [
+  // entities: temporal tracking
+  "ALTER TABLE entities ADD COLUMN updated_at TEXT",
+  "ALTER TABLE entities ADD COLUMN access_count INTEGER DEFAULT 0",
+  "ALTER TABLE entities ADD COLUMN last_accessed TEXT",
+  // observations: provenance + confidence
+  "ALTER TABLE observations ADD COLUMN source TEXT DEFAULT 'manual'",
+  "ALTER TABLE observations ADD COLUMN confidence REAL DEFAULT 1.0",
+  "ALTER TABLE observations ADD COLUMN superseded_by INTEGER REFERENCES observations(id)",
+  // relations: weight + provenance
+  "ALTER TABLE relations ADD COLUMN weight REAL DEFAULT 1.0",
+  "ALTER TABLE relations ADD COLUMN source TEXT DEFAULT 'manual'",
+  // tracked_actions: outcome tracking
+  "ALTER TABLE tracked_actions ADD COLUMN outcome TEXT",
+  "ALTER TABLE tracked_actions ADD COLUMN duration_ms INTEGER",
+  "ALTER TABLE tracked_actions ADD COLUMN session_id TEXT",
+];
+
+function runMigrations(db: CompatDatabase): void {
+  for (const sql of MIGRATIONS) {
+    try {
+      db.exec(sql);
+    } catch {
+      // Column already exists — expected for idempotent migrations
+    }
+  }
+}
 
 // --- Compatibility layer matching the better-sqlite3 API subset we use ---
 
@@ -177,6 +232,7 @@ export async function getDb(): Promise<CompatDatabase> {
     const db = wrapDatabase(raw, DB_PATH);
     db.pragma("foreign_keys = ON");
     db.exec(SCHEMA_SQL);
+    runMigrations(db);
 
     _db = db;
     return db;
@@ -207,21 +263,41 @@ export interface TrackedActionRow {
   project: string | null;
   tags: string | null;
   category: string | null;
+  outcome: string | null;
+  duration_ms: number | null;
+  session_id: string | null;
   created: string;
+}
+
+export interface ExportEntity {
+  name: string;
+  type: string;
+  observations: string[];
+  updated_at?: string | null;
+  access_count?: number;
 }
 
 export interface ExportData {
   version: number;
   exported_at: string;
-  entities: { name: string; type: string; observations: string[] }[];
-  relations: { src: string; rel: string; dst: string }[];
-  tracked_actions?: { command: string; description?: string; project?: string; tags?: string[]; category?: string; created: string }[];
+  entities: ExportEntity[];
+  relations: { src: string; rel: string; dst: string; weight?: number }[];
+  tracked_actions?: {
+    command: string;
+    description?: string;
+    project?: string;
+    tags?: string[];
+    category?: string;
+    outcome?: string;
+    duration_ms?: number;
+    created: string;
+  }[];
 }
 
 export function exportGraph(db: CompatDatabase): ExportData {
   const entities = db
-    .prepare("SELECT name, type FROM entities ORDER BY name")
-    .all() as { name: string; type: string }[];
+    .prepare("SELECT name, type, updated_at, access_count FROM entities ORDER BY name")
+    .all() as { name: string; type: string; updated_at: string | null; access_count: number }[];
 
   const observations = db
     .prepare("SELECT entity, content FROM observations ORDER BY entity, id")
@@ -235,25 +311,28 @@ export function exportGraph(db: CompatDatabase): ExportData {
   }
 
   const relations = db
-    .prepare("SELECT src, rel, dst FROM relations ORDER BY src, rel, dst")
-    .all() as { src: string; rel: string; dst: string }[];
+    .prepare("SELECT src, rel, dst, weight FROM relations ORDER BY src, rel, dst")
+    .all() as { src: string; rel: string; dst: string; weight: number }[];
 
   const actions = db
-    .prepare("SELECT command, description, project, tags, category, created FROM tracked_actions ORDER BY created")
+    .prepare("SELECT command, description, project, tags, category, outcome, duration_ms, session_id, created FROM tracked_actions ORDER BY created")
     .all() as unknown as TrackedActionRow[];
 
   return {
-    version: 1,
+    version: 2,
     exported_at: new Date().toISOString(),
     entities: entities.map((e) => ({
       name: e.name as string,
       type: e.type as string,
       observations: obsByEntity.get(e.name as string) ?? [],
+      ...(e.updated_at ? { updated_at: e.updated_at } : {}),
+      ...(e.access_count ? { access_count: e.access_count } : {}),
     })),
     relations: relations.map((r) => ({
       src: r.src as string,
       rel: r.rel as string,
       dst: r.dst as string,
+      ...(r.weight !== 1.0 ? { weight: r.weight } : {}),
     })),
     tracked_actions: actions.map((a) => ({
       command: a.command,
@@ -261,6 +340,8 @@ export function exportGraph(db: CompatDatabase): ExportData {
       ...(a.project ? { project: a.project } : {}),
       ...(a.tags ? { tags: JSON.parse(a.tags) as string[] } : {}),
       ...(a.category ? { category: a.category } : {}),
+      ...(a.outcome ? { outcome: a.outcome } : {}),
+      ...(a.duration_ms ? { duration_ms: a.duration_ms } : {}),
       created: a.created,
     })),
   };

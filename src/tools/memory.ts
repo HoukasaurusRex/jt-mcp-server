@@ -47,8 +47,12 @@ export function register(server: McpServer): void {
     async ({ entities }: MemoryAddEntitiesInput) => {
       try {
         const db = await getDb();
+        const now = new Date().toISOString();
         const insertEntity = db.prepare(
-          "INSERT OR IGNORE INTO entities (name, type) VALUES (?, ?)"
+          "INSERT OR IGNORE INTO entities (name, type, updated_at) VALUES (?, ?, ?)"
+        );
+        const touchEntity = db.prepare(
+          "UPDATE entities SET updated_at = ? WHERE name = ?"
         );
         const insertObs = db.prepare(
           "INSERT OR IGNORE INTO observations (entity, content) VALUES (?, ?)"
@@ -57,8 +61,12 @@ export function register(server: McpServer): void {
         let created = 0;
         const addAll = db.transaction(() => {
           for (const e of entities) {
-            const result = insertEntity.run(e.name, e.type);
-            if (result.changes > 0) created++;
+            const result = insertEntity.run(e.name, e.type, now);
+            if (result.changes > 0) {
+              created++;
+            } else {
+              touchEntity.run(now, e.name);
+            }
             if (e.observations) {
               for (const obs of e.observations) {
                 insertObs.run(e.name, obs);
@@ -159,6 +167,10 @@ export function register(server: McpServer): void {
             const result = insertObs.run(entity, obs);
             if (result.changes > 0) added++;
           }
+          if (added > 0) {
+            db.prepare("UPDATE entities SET updated_at = ? WHERE name = ?")
+              .run(new Date().toISOString(), entity);
+          }
         });
         addAll();
 
@@ -254,6 +266,15 @@ export function register(server: McpServer): void {
           }
           if (allEntities.length >= limit) break;
           frontier = nextFrontier;
+        }
+
+        // Bump access tracking for queried entities
+        const now = new Date().toISOString();
+        const bumpAccess = db.prepare(
+          "UPDATE entities SET access_count = COALESCE(access_count, 0) + 1, last_accessed = ? WHERE name = ?"
+        );
+        for (const e of allEntities) {
+          bumpAccess.run(now, e.name);
         }
 
         // Gather observations and relations for all found entities
@@ -433,13 +454,13 @@ export function register(server: McpServer): void {
         "Do NOT track trivial commands (ls, cd, file reads, one-off searches).",
       inputSchema: MemoryTrackActionSchema,
     },
-    async ({ command, description, project, tags, category }: MemoryTrackActionInput) => {
+    async ({ command, description, project, tags, category, outcome, duration_ms }: MemoryTrackActionInput) => {
       try {
         const db = await getDb();
         const tagsJson = tags ? JSON.stringify(tags) : null;
         db.prepare(
-          "INSERT INTO tracked_actions (command, description, project, tags, category) VALUES (?, ?, ?, ?, ?)"
-        ).run(command, description ?? null, project ?? null, tagsJson, category ?? null);
+          "INSERT INTO tracked_actions (command, description, project, tags, category, outcome, duration_ms) VALUES (?, ?, ?, ?, ?, ?, ?)"
+        ).run(command, description ?? null, project ?? null, tagsJson, category ?? null, outcome ?? null, duration_ms ?? null);
 
         const row = db.prepare(
           "SELECT COUNT(*) as count FROM tracked_actions WHERE command = ?"

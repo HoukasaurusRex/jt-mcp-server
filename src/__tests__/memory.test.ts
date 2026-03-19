@@ -20,13 +20,19 @@ const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS entities (
   name    TEXT PRIMARY KEY,
   type    TEXT NOT NULL,
-  created TEXT NOT NULL DEFAULT (datetime('now'))
+  created TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT,
+  access_count INTEGER DEFAULT 0,
+  last_accessed TEXT
 );
 CREATE TABLE IF NOT EXISTS observations (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   entity    TEXT NOT NULL REFERENCES entities(name) ON DELETE CASCADE,
   content   TEXT NOT NULL,
   created   TEXT NOT NULL DEFAULT (datetime('now')),
+  source    TEXT DEFAULT 'manual',
+  confidence REAL DEFAULT 1.0,
+  superseded_by INTEGER REFERENCES observations(id),
   UNIQUE(entity, content)
 );
 CREATE TABLE IF NOT EXISTS relations (
@@ -35,6 +41,8 @@ CREATE TABLE IF NOT EXISTS relations (
   rel     TEXT NOT NULL,
   dst     TEXT NOT NULL REFERENCES entities(name) ON DELETE CASCADE,
   created TEXT NOT NULL DEFAULT (datetime('now')),
+  weight  REAL DEFAULT 1.0,
+  source  TEXT DEFAULT 'manual',
   UNIQUE(src, rel, dst)
 );
 CREATE TABLE IF NOT EXISTS tracked_actions (
@@ -44,7 +52,33 @@ CREATE TABLE IF NOT EXISTS tracked_actions (
   project     TEXT,
   tags        TEXT,
   category    TEXT,
+  outcome     TEXT,
+  duration_ms INTEGER,
+  session_id  TEXT,
   created     TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS embeddings (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  target_type TEXT NOT NULL,
+  target_id   TEXT NOT NULL,
+  embedding   TEXT NOT NULL,
+  model       TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(target_type, target_id, model)
+);
+CREATE TABLE IF NOT EXISTS event_log (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_type TEXT NOT NULL,
+  payload    TEXT NOT NULL,
+  session_id TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS sessions (
+  id         TEXT PRIMARY KEY,
+  project    TEXT,
+  started_at TEXT NOT NULL DEFAULT (datetime('now')),
+  ended_at   TEXT,
+  summary    TEXT
 );
 `;
 

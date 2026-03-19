@@ -564,6 +564,15 @@ export const MemoryTrackActionSchema = z.object({
     .describe(
       "Action category: build, test, deploy, lint, git, setup, debug, format, or custom"
     ),
+  outcome: z
+    .enum(["success", "failure", "partial"])
+    .optional()
+    .describe("Action outcome: success, failure, or partial"),
+  duration_ms: z
+    .number()
+    .int()
+    .optional()
+    .describe("How long the action took in milliseconds"),
 });
 export type MemoryTrackActionInput = z.infer<typeof MemoryTrackActionSchema>;
 
