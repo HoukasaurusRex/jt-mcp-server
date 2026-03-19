@@ -205,7 +205,7 @@ describe("memory", () => {
     const { register } = await import("../tools/memory.js");
     const mockServer = { registerTool: vi.fn() };
     register(mockServer as any);
-    expect(mockServer.registerTool).toHaveBeenCalledTimes(9);
+    expect(mockServer.registerTool).toHaveBeenCalledTimes(12);
     const names = mockServer.registerTool.mock.calls.map((c: any) => c[0]);
     expect(names).toEqual([
       "memory_add_entities",
@@ -217,6 +217,9 @@ describe("memory", () => {
       "memory_import",
       "memory_track_action",
       "memory_suggest_tools",
+      "memory_context",
+      "memory_learn",
+      "memory_reflect",
     ]);
   });
 

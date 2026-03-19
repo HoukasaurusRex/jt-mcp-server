@@ -621,6 +621,77 @@ export const MemorySuggestToolsSchema = z.object({
 });
 export type MemorySuggestToolsInput = z.infer<typeof MemorySuggestToolsSchema>;
 
+// === memory_context ===
+export const MemoryContextSchema = z.object({
+  project: z
+    .string()
+    .optional()
+    .describe("Project name (auto-detected from cwd basename if omitted)"),
+  include_preferences: z
+    .boolean()
+    .default(true)
+    .describe("Include user preference and convention entities"),
+  include_recent: z
+    .boolean()
+    .default(true)
+    .describe("Include recently accessed entities"),
+  recent_days: z
+    .number()
+    .int()
+    .min(1)
+    .default(7)
+    .describe("How many days back to look for recent entities (default 7)"),
+  max_entities: z
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .default(50)
+    .describe("Maximum total entities to return (default 50)"),
+});
+export type MemoryContextInput = z.infer<typeof MemoryContextSchema>;
+
+// === memory_learn ===
+export const MemoryLearnSchema = z.object({
+  text: z
+    .string()
+    .describe(
+      "Free-text knowledge to store. Examples: " +
+      "'JT prefers Drizzle over Prisma for zero cold start', " +
+      "'party-tracker uses Neon PostgreSQL with Drizzle ORM'"
+    ),
+  entity: z
+    .string()
+    .optional()
+    .describe("Target entity name — if omitted, auto-detected from text or existing entities"),
+  type: z
+    .string()
+    .optional()
+    .describe("Entity type — if omitted, defaults to 'knowledge'"),
+  source: z
+    .string()
+    .optional()
+    .describe("Where this knowledge came from (e.g. 'conversation', 'code-review')"),
+});
+export type MemoryLearnInput = z.infer<typeof MemoryLearnSchema>;
+
+// === memory_reflect ===
+export const MemoryReflectSchema = z.object({
+  mode: z
+    .enum(["stats", "stale", "contradictions", "clusters", "tools"])
+    .default("stats")
+    .describe(
+      "Reflection mode: stats (graph health), stale (old entities), " +
+      "contradictions (conflicting observations), clusters (related entity groups), " +
+      "tools (tool usage analytics from event_log)"
+    ),
+  dry_run: z
+    .boolean()
+    .default(true)
+    .describe("If true, show analysis without modifying the graph"),
+});
+export type MemoryReflectInput = z.infer<typeof MemoryReflectSchema>;
+
 // === strategy tools ===
 export const StrategyExpandSchema = z.object({
   command: z
