@@ -456,22 +456,32 @@ export const MemoryAddObservationsSchema = z.object({
 export type MemoryAddObservationsInput = z.infer<typeof MemoryAddObservationsSchema>;
 
 export const MemoryQuerySchema = z.object({
+  query: z
+    .string()
+    .optional()
+    .describe("Free-text query for semantic search (requires embeddings)"),
   name: z
     .string()
     .optional()
     .describe("Search entities by name (substring match, case-insensitive)"),
   type: z.string().optional().describe("Filter entities by exact type"),
+  mode: z
+    .enum(["keyword", "semantic", "hybrid", "graph", "temporal"])
+    .default("hybrid")
+    .describe(
+      "Search mode: keyword (substring), semantic (vector similarity), hybrid (both), graph (BFS traversal), temporal (recently accessed)"
+    ),
   relation: z
     .string()
     .optional()
-    .describe("Filter by relation type when traversing"),
+    .describe("Filter by relation type when traversing (graph mode)"),
   depth: z
     .number()
     .int()
     .min(1)
     .max(5)
     .default(1)
-    .describe("Traversal depth for related entities (default 1)"),
+    .describe("Traversal depth for related entities (graph mode, default 1)"),
   limit: z
     .number()
     .int()
@@ -479,6 +489,10 @@ export const MemoryQuerySchema = z.object({
     .max(100)
     .default(20)
     .describe("Max entities to return (default 20)"),
+  since: z
+    .string()
+    .optional()
+    .describe("ISO date string — return entities accessed since this date (temporal mode)"),
 });
 export type MemoryQueryInput = z.infer<typeof MemoryQuerySchema>;
 

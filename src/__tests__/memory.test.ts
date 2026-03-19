@@ -401,7 +401,7 @@ describe("memory", () => {
       await seedData(mockServer);
       const query = getHandler(mockServer, "memory_query");
 
-      const result = await query({ name: "JT", depth: 2, limit: 20 });
+      const result = await query({ name: "JT", depth: 2, limit: 20, mode: "graph" });
       const data = JSON.parse(result.content[0].text);
       // JT -> TypeScript, Vitest -> TypeScript (already visited)
       expect(data.entities.length).toBeGreaterThanOrEqual(3);

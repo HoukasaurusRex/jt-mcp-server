@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { getDb, exportGraph, autoExport } from "../lib/memory-db.js";
+import { getDb, exportGraph, autoExport, type CompatDatabase } from "../lib/memory-db.js";
+import { embed } from "../lib/embeddings.js";
+import { findSimilar, storeEmbedding, invalidateEmbeddingCache } from "../lib/vector-search.js";
 import {
   MemoryAddEntitiesSchema,
   MemoryAddRelationsSchema,
@@ -32,6 +34,71 @@ interface RelationRow {
   src: string;
   rel: string;
   dst: string;
+}
+
+// --- Query helpers ---
+
+function keywordSearch(db: CompatDatabase, name: string | undefined, type: string | undefined, limit: number): string[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  if (name) {
+    conditions.push("name LIKE ?");
+    params.push(`%${name}%`);
+  }
+  if (type) {
+    conditions.push("type = ?");
+    params.push(type);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const rows = db
+    .prepare(`SELECT name FROM entities ${where} LIMIT ?`)
+    .all(...params, limit) as { name: string }[];
+  return rows.map((r) => r.name);
+}
+
+function graphTraversal(
+  db: CompatDatabase,
+  name: string | undefined,
+  type: string | undefined,
+  relation: string | undefined,
+  depth: number,
+  limit: number
+): string[] {
+  const seeds = keywordSearch(db, name, type, limit);
+  if (seeds.length === 0) return [];
+
+  const visited = new Set<string>();
+  const result: string[] = [];
+  let frontier = seeds;
+
+  const getOutgoing = db.prepare(
+    relation
+      ? "SELECT src, rel, dst FROM relations WHERE src = ? AND rel = ?"
+      : "SELECT src, rel, dst FROM relations WHERE src = ?"
+  );
+
+  for (let d = 0; d < depth && frontier.length > 0; d++) {
+    const nextFrontier: string[] = [];
+    for (const entityName of frontier) {
+      if (visited.has(entityName)) continue;
+      visited.add(entityName);
+      result.push(entityName);
+      if (result.length >= limit) break;
+
+      const rels = (
+        relation
+          ? getOutgoing.all(entityName, relation)
+          : getOutgoing.all(entityName)
+      ) as unknown as RelationRow[];
+      for (const r of rels) {
+        if (!visited.has(r.dst)) nextFrontier.push(r.dst);
+      }
+    }
+    if (result.length >= limit) break;
+    frontier = nextFrontier;
+  }
+
+  return result.slice(0, limit);
 }
 
 export function register(server: McpServer): void {
@@ -77,6 +144,23 @@ export function register(server: McpServer): void {
         addAll();
 
         autoExport(db);
+
+        // Background: generate embeddings for new entities
+        Promise.resolve().then(async () => {
+          for (const e of entities) {
+            try {
+              const vec = await embed(`${e.name} (${e.type})`);
+              if (vec) storeEmbedding(db, "entity", e.name, vec, "all-minilm");
+              if (e.observations) {
+                for (const obs of e.observations) {
+                  const obsVec = await embed(obs);
+                  if (obsVec) storeEmbedding(db, "observation", `${e.name}:${obs.slice(0, 50)}`, obsVec, "all-minilm");
+                }
+              }
+            } catch { /* best-effort */ }
+          }
+        }).catch(() => {});
+
         return textResult(
           `Created ${created} new entities (${entities.length - created} already existed).`
         );
@@ -194,100 +278,86 @@ export function register(server: McpServer): void {
         "Supports search by name (substring), type filter, relation filter, and BFS traversal up to depth 5.",
       inputSchema: MemoryQuerySchema,
     },
-    async ({ name, type, relation, depth, limit }: MemoryQueryInput) => {
+    async ({ query, name, type, mode, relation, depth, limit, since }: MemoryQueryInput) => {
       try {
         const db = await getDb();
+        let entityNames: string[] = [];
 
-        // Find seed entities
-        const conditions: string[] = [];
-        const params: string[] = [];
-        if (name) {
-          conditions.push("name LIKE ?");
-          params.push(`%${name}%`);
-        }
-        if (type) {
-          conditions.push("type = ?");
-          params.push(type);
-        }
-
-        const where =
-          conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-        const seeds = db
-          .prepare(`SELECT name, type FROM entities ${where} LIMIT ?`)
-          .all(...params, limit) as unknown as EntityRow[];
-
-        if (seeds.length === 0) {
-          return textResult(JSON.stringify({ entities: [], relations: [] }, null, 2));
-        }
-
-        // BFS traversal
-        const visited = new Set<string>();
-        const allEntities: EntityRow[] = [];
-        let frontier = seeds.map((s) => s.name);
-
-        const getEntity = db.prepare(
-          "SELECT name, type FROM entities WHERE name = ?"
-        );
-        const getOutgoing = db.prepare(
-          relation
-            ? "SELECT src, rel, dst FROM relations WHERE src = ? AND rel = ?"
-            : "SELECT src, rel, dst FROM relations WHERE src = ?"
-        );
         const getObservations = db.prepare(
           "SELECT content FROM observations WHERE entity = ? ORDER BY id"
         );
 
-        for (let d = 0; d < depth && frontier.length > 0; d++) {
-          const nextFrontier: string[] = [];
-          for (const entityName of frontier) {
-            if (visited.has(entityName)) continue;
-            visited.add(entityName);
+        // --- Resolve entity names based on mode ---
+        if (mode === "temporal") {
+          const sinceDate = since ?? new Date(Date.now() - 7 * 86400000).toISOString();
+          const rows = db
+            .prepare(
+              "SELECT name, type FROM entities WHERE last_accessed >= ? ORDER BY last_accessed DESC LIMIT ?"
+            )
+            .all(sinceDate, limit) as unknown as EntityRow[];
+          entityNames = rows.map((r) => r.name);
 
-            const entity =
-              allEntities.find((e) => e.name === entityName) ??
-              (getEntity.get(entityName) as EntityRow | undefined);
-            if (!entity) continue;
-            if (!allEntities.some((e) => e.name === entity.name)) {
-              allEntities.push(entity);
-            }
-
-            if (allEntities.length >= limit) break;
-
-            const rels = (
-              relation
-                ? getOutgoing.all(entityName, relation)
-                : getOutgoing.all(entityName)
-            ) as unknown as RelationRow[];
-            for (const r of rels) {
-              if (!visited.has(r.dst)) {
-                nextFrontier.push(r.dst);
-              }
-            }
+        } else if (mode === "semantic" || (mode === "hybrid" && query)) {
+          const searchText = query ?? name ?? "";
+          if (!searchText) {
+            return textResult(JSON.stringify({ entities: [], relations: [] }, null, 2));
           }
-          if (allEntities.length >= limit) break;
-          frontier = nextFrontier;
+
+          const queryVec = await embed(searchText);
+          let semanticNames: string[] = [];
+
+          if (queryVec) {
+            const similar = findSimilar(db, queryVec, { limit: limit * 2, targetType: "entity" });
+            semanticNames = similar.map((s) => s.target_id);
+          }
+
+          if (mode === "hybrid") {
+            // Also do keyword search and merge
+            const keywordNames = keywordSearch(db, name, type, limit);
+            const merged = new Set([...semanticNames, ...keywordNames]);
+            entityNames = [...merged].slice(0, limit);
+          } else {
+            entityNames = semanticNames.slice(0, limit);
+          }
+
+          // If semantic search returned nothing (no embeddings), fall back to keyword
+          if (entityNames.length === 0) {
+            entityNames = keywordSearch(db, name ?? query, type, limit);
+          }
+
+        } else if (mode === "graph") {
+          entityNames = graphTraversal(db, name, type, relation, depth, limit);
+
+        } else {
+          // keyword mode (default fallback)
+          entityNames = keywordSearch(db, name, type, limit);
         }
 
-        // Bump access tracking for queried entities
+        if (entityNames.length === 0) {
+          return textResult(JSON.stringify({ entities: [], relations: [] }, null, 2));
+        }
+
+        // Bump access tracking
         const now = new Date().toISOString();
         const bumpAccess = db.prepare(
           "UPDATE entities SET access_count = COALESCE(access_count, 0) + 1, last_accessed = ? WHERE name = ?"
         );
-        for (const e of allEntities) {
-          bumpAccess.run(now, e.name);
+        for (const n of entityNames) {
+          bumpAccess.run(now, n);
         }
 
-        // Gather observations and relations for all found entities
-        const entityNames = allEntities.map((e) => e.name);
-        const entitiesWithObs = allEntities.slice(0, limit).map((e) => ({
-          name: e.name,
-          type: e.type,
-          observations: (
-            getObservations.all(e.name) as { content: string }[]
-          ).map((o) => o.content),
-        }));
+        // Gather full entity data
+        const entitiesWithObs = entityNames.map((n) => {
+          const e = db.prepare("SELECT name, type FROM entities WHERE name = ?").get(n) as EntityRow | undefined;
+          if (!e) return null;
+          return {
+            name: e.name,
+            type: e.type,
+            observations: (getObservations.all(e.name) as { content: string }[]).map((o) => o.content),
+          };
+        }).filter(Boolean);
 
-        // Get all relations between found entities
+        // Get relations between found entities
         const placeholders = entityNames.map(() => "?").join(",");
         const allRelations =
           entityNames.length > 0
