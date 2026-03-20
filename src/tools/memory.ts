@@ -22,6 +22,7 @@ import type {
   MemoryAddObservationsInput,
   MemoryQueryInput,
   MemoryDeleteInput,
+  MemoryExportInput,
   MemoryImportInput,
   MemoryTrackActionInput,
   MemorySuggestToolsInput,
@@ -458,10 +459,23 @@ export function register(server: McpServer): void {
         "Export the entire knowledge graph as JSON. Use this to create backups or share your memory database.",
       inputSchema: MemoryExportSchema,
     },
-    async () => {
+    async ({ format }: MemoryExportInput) => {
       try {
         const db = await getDb();
         const data = exportGraph(db);
+
+        if (format === "mermaid") {
+          const lines = ["graph LR"];
+          const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9_-]/g, "_");
+          for (const e of data.entities) {
+            lines.push(`    ${sanitize(e.name)}["${e.name} (${e.type})"]`);
+          }
+          for (const r of data.relations) {
+            lines.push(`    ${sanitize(r.src)} -->|${r.rel}| ${sanitize(r.dst)}`);
+          }
+          return textResult(lines.join("\n"));
+        }
+
         return textResult(JSON.stringify(data, null, 2));
       } catch (err) {
         return catchToolError(err);

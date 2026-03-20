@@ -14,6 +14,7 @@ import { register as registerNetlify } from "./tools/netlify.js";
 import { register as registerJira } from "./tools/jira.js";
 import { register as registerConfluence } from "./tools/confluence.js";
 import { register as registerSearch } from "./tools/search.js";
+import { register as registerMemoryResources } from "./resources/memory.js";
 
 const server = new McpServer({
   name: "@houkasaurusrex/jt-mcp-server",
@@ -27,6 +28,7 @@ const coreGroups: [string, (s: typeof server) => void][] = [
   ["github", registerGitHub],
   ["git", registerGit],
   ["memory", registerMemory],
+  ["memory-resources", registerMemoryResources],
   ["journal", registerJournal],
   ["strategy", registerStrategy],
 ];

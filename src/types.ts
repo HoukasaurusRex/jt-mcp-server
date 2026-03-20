@@ -523,7 +523,12 @@ export const MemoryDeleteSchema = z.object({
 });
 export type MemoryDeleteInput = z.infer<typeof MemoryDeleteSchema>;
 
-export const MemoryExportSchema = z.object({});
+export const MemoryExportSchema = z.object({
+  format: z
+    .enum(["json", "mermaid"])
+    .default("json")
+    .describe("Export format: json (full graph data) or mermaid (graph diagram syntax)"),
+});
 export type MemoryExportInput = z.infer<typeof MemoryExportSchema>;
 
 export const MemoryImportSchema = z.object({
