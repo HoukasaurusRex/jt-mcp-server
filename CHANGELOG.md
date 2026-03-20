@@ -1,3 +1,20 @@
+# [1.7.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.6.0...v1.7.0) (2026-03-20)
+
+
+### Bug Fixes
+
+* fall back to gh auth token when GITHUB_TOKEN env var is missing ([bb02ef6](https://github.com/HoukasaurusRex/jt-mcp-server/commit/bb02ef691cd2e6ed80204e4deacd7b37a71b9d61))
+
+
+### Features
+
+* add MCP resources for knowledge graph and mermaid visualization export ([33b682e](https://github.com/HoukasaurusRex/jt-mcp-server/commit/33b682ea7896b07a5f673941f23bd18e62d84759))
+* add memory_context, memory_learn, and memory_reflect tools ([28122d1](https://github.com/HoukasaurusRex/jt-mcp-server/commit/28122d136fd2d4b5d427ef0a08890909db6ecdec))
+* add semantic search with Ollama embeddings and multi-modal memory_query ([cc0f2bb](https://github.com/HoukasaurusRex/jt-mcp-server/commit/cc0f2bb4e52f8ff5843b688b20a74f69f54fc151))
+* add strategy tools for prompt expansion from templates ([efb3bba](https://github.com/HoukasaurusRex/jt-mcp-server/commit/efb3bbaef4c2ebab0fdbdf521b72f5347f7b2107))
+* add temporal tracking, confidence scoring, and event log to knowledge graph ([b4c31a8](https://github.com/HoukasaurusRex/jt-mcp-server/commit/b4c31a8c7749037fd1a37feaeffee42426d7e05a))
+* add tool telemetry that logs every tool call to knowledge graph event_log ([a7d34f9](https://github.com/HoukasaurusRex/jt-mcp-server/commit/a7d34f96a251e8ba0486ba47352020520dadc364))
+
 # [1.6.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.5.0...v1.6.0) (2026-03-11)
 
 
