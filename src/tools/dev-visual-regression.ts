@@ -3,6 +3,7 @@ import { execa } from "execa";
 import { DevVisualRegressionSchema } from "../types.js";
 import { killPort, waitForPort } from "../lib/port-utils.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 
 async function serveDir(dir: string, port: number, timeout: number): Promise<{ kill: () => void }> {
   await killPort(port);
@@ -22,7 +23,7 @@ async function serveDir(dir: string, port: number, timeout: number): Promise<{ k
 }
 
 export function register(server: McpServer): void {
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "dev_visual_regression",
     {
       description: "Run a visual regression test cycle: serve reference dir, capture/update baselines, serve test dir, run comparison tests",

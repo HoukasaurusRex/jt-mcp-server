@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StrategyExpandSchema, StrategyListSchema } from "../types.js";
 import type { StrategyExpandInput, StrategyListInput } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 import {
   loadStrategies,
   matchStrategy,
@@ -9,7 +10,7 @@ import {
 } from "../lib/strategy-loader.js";
 
 export function register(server: McpServer): void {
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "strategy_expand",
     {
       description:
@@ -57,7 +58,7 @@ export function register(server: McpServer): void {
     }
   );
 
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "strategy_list",
     {
       description:

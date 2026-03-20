@@ -2,14 +2,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { execa } from "execa";
 import { GitConventionalCommitSchema } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 
 const STRICT_RE = /^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+/;
 const RELAXED_RE = /^\w+(\(.+\))?!?: .+/;
 
-const FORBIDDEN_PATTERNS = [".env", "node_modules", "credentials", ".secret"];
+const FORBIDDEN_PATTERNS = [".env", "node_modules", "credentials", ".secret", ".pem", "id_rsa", ".key", ".p12", ".pfx", ".npmrc", "aws-credentials"];
 
 export function register(server: McpServer): void {
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "git_conventional_commit",
     {
       description: "Stage files and create a conventional commit. Validates message format and blocks sensitive files.",

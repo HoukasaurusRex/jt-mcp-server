@@ -4,6 +4,7 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import { join } from "node:path";
 import { JournalLogSchema } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 
 const HOME = process.env.HOME ?? "/tmp";
 
@@ -77,7 +78,7 @@ function buildStandupLine(
 }
 
 export function register(server: McpServer): void {
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "journal_log",
     {
       description:
@@ -100,7 +101,7 @@ export function register(server: McpServer): void {
 
         // Collect logs in parallel
         const results = await Promise.all(
-          repoPaths.map((r) => repoLog(r, effectiveSince, effectiveUntil))
+          repoPaths.map((r: string) => repoLog(r, effectiveSince, effectiveUntil))
         );
 
         const line = buildStandupLine(results);

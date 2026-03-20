@@ -14,6 +14,7 @@ import type {
   GitHubCreatePRInput,
 } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 
 let _gqlClient: ReturnType<typeof graphql.defaults> | null = null;
 
@@ -33,7 +34,7 @@ async function getGraphqlClient() {
 }
 
 export function register(server: McpServer): void {
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "github_project_next_issue",
     {
       description: "Get the oldest open Todo issue from a GitHub ProjectV2 board",
@@ -115,7 +116,7 @@ export function register(server: McpServer): void {
     }
   );
 
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "github_project_set_status",
     {
       description: "Update the status of a GitHub ProjectV2 item (Todo, In Progress, Done)",
@@ -147,7 +148,7 @@ export function register(server: McpServer): void {
     }
   );
 
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "github_project_complete_issue",
     {
       description: "Close a GitHub issue and set its project board status to Done in one call",
@@ -185,7 +186,7 @@ export function register(server: McpServer): void {
     }
   );
 
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "github_create_pr",
     {
       description: "Create a GitHub pull request using the gh CLI",

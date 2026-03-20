@@ -8,6 +8,7 @@ import {
   NetlifyListFunctionsSchema,
 } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 
 /** Call `netlify api <operation>` and return parsed JSON. */
 async function netlifyApi<T = unknown>(
@@ -37,7 +38,7 @@ async function getLatestDeployId(siteName: string): Promise<string> {
 
 export function register(server: McpServer): void {
   // ── netlify_deploy_status ─────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "netlify_deploy_status",
     {
       description: "Check the latest deploy status for a Netlify site",
@@ -81,7 +82,7 @@ export function register(server: McpServer): void {
   );
 
   // ── netlify_build_log ─────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "netlify_build_log",
     {
       description:
@@ -162,7 +163,7 @@ export function register(server: McpServer): void {
   );
 
   // ── netlify_function_log ──────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "netlify_function_log",
     {
       description:
@@ -207,7 +208,7 @@ export function register(server: McpServer): void {
   );
 
   // ── netlify_list_deploys ──────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "netlify_list_deploys",
     {
       description:
@@ -255,7 +256,7 @@ export function register(server: McpServer): void {
   );
 
   // ── netlify_list_functions ────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "netlify_list_functions",
     {
       description:

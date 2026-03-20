@@ -6,11 +6,12 @@ import {
   ConfluenceUpdatePageSchema,
 } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 import { atlassianFetch } from "../lib/atlassian-client.js";
 
 export function register(server: McpServer): void {
   // ── confluence_search ─────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "confluence_search",
     {
       description:
@@ -68,7 +69,7 @@ export function register(server: McpServer): void {
   );
 
   // ── confluence_get_page ───────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "confluence_get_page",
     {
       description:
@@ -120,7 +121,7 @@ export function register(server: McpServer): void {
   );
 
   // ── confluence_create_page ────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "confluence_create_page",
     {
       description:
@@ -172,7 +173,7 @@ export function register(server: McpServer): void {
   );
 
   // ── confluence_update_page ────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "confluence_update_page",
     {
       description:

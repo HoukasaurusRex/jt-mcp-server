@@ -8,13 +8,14 @@ import {
   JiraAssignSchema,
 } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 import { atlassianFetch, toAdfParagraph, resolveAssignee } from "../lib/atlassian-client.js";
 
 // Jira REST API v3 — https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
 export function register(server: McpServer): void {
   // ── jira_search ───────────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "jira_search",
     {
       description:
@@ -42,7 +43,7 @@ export function register(server: McpServer): void {
   );
 
   // ── jira_get_issue ────────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "jira_get_issue",
     {
       description:
@@ -65,7 +66,7 @@ export function register(server: McpServer): void {
   );
 
   // ── jira_create_issue ─────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "jira_create_issue",
     {
       description:
@@ -109,7 +110,7 @@ export function register(server: McpServer): void {
   );
 
   // ── jira_transition ───────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "jira_transition",
     {
       description:
@@ -149,7 +150,7 @@ export function register(server: McpServer): void {
   );
 
   // ── jira_add_comment ──────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "jira_add_comment",
     {
       description: "Add a comment to a Jira issue via the Atlassian REST API.",
@@ -174,7 +175,7 @@ export function register(server: McpServer): void {
   );
 
   // ── jira_assign ───────────────────────────────────────────────────
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "jira_assign",
     {
       description:

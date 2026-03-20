@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { existsSync } from "node:fs";
 import { DevWorktreeSchema } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
+import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
 import { resolveNodeBinPath } from "../lib/nvm-utils.js";
 
 function worktreePath(branch: string): string {
@@ -11,7 +12,7 @@ function worktreePath(branch: string): string {
 }
 
 export function register(server: McpServer): void {
-  server.registerTool(
+  registerToolWithTelemetry(server,
     "dev_worktree",
     {
       description: "Manage git worktrees for multi-branch workflows (create with deps install, build, remove, or list)",
