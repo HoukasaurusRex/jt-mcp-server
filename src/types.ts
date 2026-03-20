@@ -408,6 +408,83 @@ export const ConfluenceUpdatePageSchema = z.object({
 });
 export type ConfluenceUpdatePageInput = z.infer<typeof ConfluenceUpdatePageSchema>;
 
+// === slack tools (requires SLACK_USER_TOKEN or Slack CLI auth) ===
+
+export const SlackSearchSchema = z.object({
+  query: z
+    .string()
+    .describe(
+      "Slack search query. Supports modifiers: 'in:#channel', 'from:@user', 'before:2024-01-01', 'after:2024-01-01', 'has:link', 'has:reaction'"
+    ),
+  count: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(20)
+    .describe("Number of messages to return per page (default 20, max 100)"),
+  page: z
+    .number()
+    .int()
+    .min(1)
+    .default(1)
+    .describe("Page number for pagination (default 1)"),
+  sort: z
+    .enum(["score", "timestamp"])
+    .default("score")
+    .describe("Sort order: 'score' (relevance) or 'timestamp' (newest first)"),
+  sort_dir: z
+    .enum(["asc", "desc"])
+    .default("desc")
+    .describe("Sort direction (default desc)"),
+});
+export type SlackSearchInput = z.infer<typeof SlackSearchSchema>;
+
+export const SlackChannelsSchema = z.object({
+  filter: z
+    .string()
+    .optional()
+    .describe("Filter channels by name substring (case-insensitive, client-side)"),
+  types: z
+    .string()
+    .default("public_channel")
+    .describe("Comma-separated channel types: public_channel, private_channel, mpim, im (default: public_channel)"),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(200)
+    .default(100)
+    .describe("Max channels to return (default 100). Note: returns first page only in large workspaces."),
+  exclude_archived: z
+    .boolean()
+    .default(true)
+    .describe("Exclude archived channels (default true)"),
+});
+export type SlackChannelsInput = z.infer<typeof SlackChannelsSchema>;
+
+export const SlackHistorySchema = z.object({
+  channel: z
+    .string()
+    .describe("Channel ID (e.g. 'C01ABCDEF'). Use slack_channels to find IDs by name."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(100)
+    .default(25)
+    .describe("Number of messages to return (default 25, max 100)"),
+  oldest: z
+    .string()
+    .optional()
+    .describe("Start of time range as Unix timestamp (e.g. '1234567890.123456')"),
+  latest: z
+    .string()
+    .optional()
+    .describe("End of time range as Unix timestamp"),
+});
+export type SlackHistoryInput = z.infer<typeof SlackHistorySchema>;
+
 // === memory tools ===
 
 const MemoryEntitySchema = z.object({

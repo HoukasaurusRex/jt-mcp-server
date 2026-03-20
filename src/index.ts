@@ -14,6 +14,8 @@ import { register as registerNetlify } from "./tools/netlify.js";
 import { register as registerJira } from "./tools/jira.js";
 import { register as registerConfluence } from "./tools/confluence.js";
 import { register as registerSearch } from "./tools/search.js";
+import { register as registerSlack } from "./tools/slack.js";
+import { isSlackAvailable } from "./lib/slack-client.js";
 import { register as registerMemoryResources } from "./resources/memory.js";
 
 const server = new McpServer({
@@ -33,12 +35,14 @@ const coreGroups: [string, (s: typeof server) => void][] = [
   ["strategy", registerStrategy],
 ];
 
-// Optional tools — registered when their env var is present
-const conditionalGroups: [string, (s: typeof server) => void, string][] = [
+// Optional tools — registered when their gate condition is met
+type ToolGate = string | (() => boolean);
+const conditionalGroups: [string, (s: typeof server) => void, ToolGate][] = [
   ["netlify", registerNetlify, "NETLIFY_AUTH_TOKEN"],
   ["jira", registerJira, "ATLASSIAN_DOMAIN"],
   ["confluence", registerConfluence, "ATLASSIAN_DOMAIN"],
   ["search", registerSearch, "JT_MCP_ENABLE_SEARCH"],
+  ["slack", registerSlack, isSlackAvailable],
 ];
 
 for (const [name, register] of coreGroups) {
@@ -49,8 +53,9 @@ for (const [name, register] of coreGroups) {
   }
 }
 
-for (const [name, register, envVar] of conditionalGroups) {
-  if (!process.env[envVar]) continue;
+for (const [name, register, gate] of conditionalGroups) {
+  const enabled = typeof gate === "string" ? !!process.env[gate] : gate();
+  if (!enabled) continue;
   try {
     register(server);
   } catch (err) {
