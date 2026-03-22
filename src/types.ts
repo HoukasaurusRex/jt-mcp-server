@@ -794,6 +794,44 @@ export const StrategyListSchema = z.object({
 });
 export type StrategyListInput = z.infer<typeof StrategyListSchema>;
 
+// === planning tools ===
+export const PlanFromTicketSchema = z.object({
+  ticket: z
+    .string()
+    .describe(
+      "Ticket identifier: Jira key (PROJ-123), GitHub issue number (42 or #42), " +
+      "or GitHub issue URL (https://github.com/owner/repo/issues/42)"
+    ),
+  repo: z
+    .string()
+    .optional()
+    .describe("owner/repo for GitHub issues (default: inferred from gh or ticket URL)"),
+  cwd: z
+    .string()
+    .optional()
+    .describe("Project root for file tree context"),
+  strategies_dir: z
+    .string()
+    .default(`${process.env.HOME}/.jt-strategies`)
+    .describe("Directory containing strategy .md files"),
+});
+export type PlanFromTicketInput = z.infer<typeof PlanFromTicketSchema>;
+
+export const PlanReviewSchema = z.object({
+  plan: z
+    .string()
+    .optional()
+    .describe(
+      "The plan text to review. If omitted, the returned prompt instructs " +
+      "the AI to review the plan already in conversation context."
+    ),
+  strategies_dir: z
+    .string()
+    .default(`${process.env.HOME}/.jt-strategies`)
+    .describe("Directory containing strategy .md files"),
+});
+export type PlanReviewInput = z.infer<typeof PlanReviewSchema>;
+
 // === journal tools ===
 export const JournalLogSchema = z.object({
   since: z

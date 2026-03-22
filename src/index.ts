@@ -10,6 +10,7 @@ import { register as registerGit } from "./tools/git.js";
 import { register as registerMemory } from "./tools/memory.js";
 import { register as registerJournal } from "./tools/journal.js";
 import { register as registerStrategy } from "./tools/strategy.js";
+import { register as registerPlanning } from "./tools/planning.js";
 import { register as registerNetlify } from "./tools/netlify.js";
 import { register as registerJira } from "./tools/jira.js";
 import { register as registerConfluence } from "./tools/confluence.js";
@@ -33,6 +34,7 @@ const coreGroups: [string, (s: typeof server) => void][] = [
   ["memory-resources", registerMemoryResources],
   ["journal", registerJournal],
   ["strategy", registerStrategy],
+  ["planning", registerPlanning],
 ];
 
 // Optional tools — registered when their gate condition is met
