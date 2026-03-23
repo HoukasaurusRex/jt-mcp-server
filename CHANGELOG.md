@@ -1,3 +1,11 @@
+# [1.8.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.7.0...v1.8.0) (2026-03-23)
+
+
+### Features
+
+* add plan_from_ticket and plan_review MCP tools ([136b56f](https://github.com/HoukasaurusRex/jt-mcp-server/commit/136b56f521d9b90dbbc6a430d89e2b86a387e091))
+* add Slack search, channels, and history tools ([1684ead](https://github.com/HoukasaurusRex/jt-mcp-server/commit/1684eadb816a7bcbc71b7a43d461edf5e262f1b3))
+
 # [1.7.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.6.0...v1.7.0) (2026-03-20)
 
 
