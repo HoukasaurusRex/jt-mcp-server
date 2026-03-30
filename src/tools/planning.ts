@@ -101,11 +101,20 @@ export function register(server: McpServer): void {
               "Set ATLASSIAN_DOMAIN, ATLASSIAN_EMAIL, and ATLASSIAN_API_TOKEN to use Jira tickets."
             );
           }
-          const res = await atlassianFetch(`/rest/api/3/issue/${ref.key}`);
+          const res = await atlassianFetch(`/rest/api/3/issue/${ref.key}`, {
+            query: {
+              fields: [
+                "summary", "description", "status", "priority", "issuetype",
+                "labels", "assignee", "reporter", "parent", "subtasks",
+                "issuelinks", "comment", "acceptance_criteria",
+                "customfield_10020", // sprint
+              ].join(","),
+            },
+          });
           if (!res.ok) {
             return errorResult(`Jira API error (${res.status}): ${JSON.stringify(res.data)}`);
           }
-          ticketData = JSON.stringify(res.data, null, 2);
+          ticketData = JSON.stringify(res.data);
         } else {
           const targetRepo = ref.repo ?? repo;
           const args = [
@@ -131,7 +140,7 @@ export function register(server: McpServer): void {
           try {
             const result = await execa("git", ["ls-tree", "-r", "--name-only", "HEAD"], { cwd });
             const lines = result.stdout.split("\n");
-            const MAX_TREE_LINES = 500;
+            const MAX_TREE_LINES = 200;
             fileTree =
               lines.length > MAX_TREE_LINES
                 ? lines.slice(0, MAX_TREE_LINES).join("\n") +
@@ -145,14 +154,22 @@ export function register(server: McpServer): void {
         // --- Load strategy prompt ---
         const prompt = await loadTemplateByName("plan_ticket", strategies_dir, PLAN_TICKET_FALLBACK);
 
-        // --- Compose output ---
+        // --- Compose output (with safety cap) ---
+        const MAX_OUTPUT_CHARS = 80_000;
         const sections = [
           "# Ticket Data\n\n" + ticketData,
           fileTree ? "# File Tree\n\n" + fileTree : "",
           "# Instructions\n\n" + prompt,
         ].filter(Boolean);
 
-        return textResult(sections.join("\n\n---\n\n"));
+        let output = sections.join("\n\n---\n\n");
+        if (output.length > MAX_OUTPUT_CHARS) {
+          output =
+            output.slice(0, MAX_OUTPUT_CHARS) +
+            `\n\n... (output truncated from ${output.length.toLocaleString()} to ${MAX_OUTPUT_CHARS.toLocaleString()} characters)`;
+        }
+
+        return textResult(output);
       } catch (err) {
         return catchToolError(err);
       }

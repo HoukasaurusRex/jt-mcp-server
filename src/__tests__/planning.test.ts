@@ -204,7 +204,7 @@ describe("planning tools", () => {
       expect(result.content[0].text).toContain("GitHub CLI (gh) is not installed");
     });
 
-    it("truncates file tree when over 500 lines", async () => {
+    it("truncates file tree when over 200 lines", async () => {
       const manyFiles = Array.from({ length: 600 }, (_, i) => `src/file${i}.ts`).join("\n");
       mockExeca
         .mockResolvedValueOnce({
@@ -225,7 +225,7 @@ describe("planning tools", () => {
         strategies_dir: "/tmp/strategies",
       });
 
-      expect(result.content[0].text).toContain("100 more files");
+      expect(result.content[0].text).toContain("400 more files");
     });
 
     it("skips file tree silently when git fails", async () => {
