@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.8.0...v1.8.1) (2026-03-30)
+
+
+### Bug Fixes
+
+* cap plan_from_ticket output to prevent 180K+ char responses ([e51f8de](https://github.com/HoukasaurusRex/jt-mcp-server/commit/e51f8de5a46f4452674a539abfab46acce5de4a5))
+
 # [1.8.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.7.0...v1.8.0) (2026-03-23)
 
 
