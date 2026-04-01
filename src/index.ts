@@ -19,6 +19,14 @@ import { register as registerSlack } from "./tools/slack.js";
 import { isSlackAvailable } from "./lib/slack-client.js";
 import { register as registerMemoryResources } from "./resources/memory.js";
 
+// Ensure common binary paths are available (MCP servers may not inherit interactive shell PATH)
+const extraPaths = ["/opt/homebrew/bin", "/usr/local/bin"];
+const currentPath = process.env.PATH ?? "";
+const missing = extraPaths.filter((p) => !currentPath.split(":").includes(p));
+if (missing.length) {
+  process.env.PATH = [...missing, currentPath].join(":");
+}
+
 const server = new McpServer({
   name: "@houkasaurusrex/jt-mcp-server",
   version: "0.0.0",
