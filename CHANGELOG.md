@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.8.2...v1.9.0) (2026-05-13)
+
+
+### Features
+
+* add jira components/custom_fields and memory entity scope ([b96fb36](https://github.com/HoukasaurusRex/jt-mcp-server/commit/b96fb36f6320ec8d970f9738b160270dad4cd0dc))
+
 ## [1.8.2](https://github.com/HoukasaurusRex/jt-mcp-server/compare/v1.8.1...v1.8.2) (2026-04-02)
 
 
