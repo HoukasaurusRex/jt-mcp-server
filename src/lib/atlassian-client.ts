@@ -85,6 +85,43 @@ export const toAdfParagraph = (text: string) => ({
   content: [{ type: "paragraph", content: [{ type: "text", text }] }],
 });
 
+// Custom field name → ID cache (process-lifetime; newly created fields won't appear until restart)
+let _customFieldCache: Map<string, string[]> | null = null;
+
+/** Resolve a custom field name or ID to a Jira custom field ID.
+ *  Accepts explicit IDs (customfield_\d+) or display names (case-insensitive). */
+export async function resolveCustomFieldId(
+  nameOrId: string
+): Promise<{ id?: string; error?: string }> {
+  if (/^customfield_\d+$/.test(nameOrId)) return { id: nameOrId };
+
+  if (!_customFieldCache) {
+    const res = await atlassianFetch<Array<{ id: string; name: string; custom: boolean }>>(
+      "/rest/api/3/field"
+    );
+    if (!res.ok) {
+      return { error: `Failed to load field list (${res.status}): ${JSON.stringify(res.data)}` };
+    }
+    _customFieldCache = new Map();
+    for (const f of res.data) {
+      if (!f.custom) continue;
+      const key = f.name.toLowerCase();
+      const existing = _customFieldCache.get(key) ?? [];
+      existing.push(f.id);
+      _customFieldCache.set(key, existing);
+    }
+  }
+
+  const matches = _customFieldCache.get(nameOrId.toLowerCase()) ?? [];
+  if (matches.length === 0) {
+    return { error: `Unknown custom field "${nameOrId}". Use the customfield_NNNNN ID.` };
+  }
+  if (matches.length > 1) {
+    return { error: `Ambiguous custom field "${nameOrId}" matches: ${matches.join(", ")}. Use the explicit ID.` };
+  }
+  return { id: matches[0] };
+}
+
 /** Resolve an assignee string to an Atlassian accountId. */
 export async function resolveAssignee(
   assignee: string

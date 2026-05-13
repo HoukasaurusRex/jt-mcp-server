@@ -27,10 +27,25 @@ if (missing.length) {
   process.env.PATH = [...missing, currentPath].join(":");
 }
 
-const server = new McpServer({
-  name: "@houkasaurusrex/jt-mcp-server",
-  version: "0.0.0",
-});
+const INSTRUCTIONS = `jt-mcp memory tools store PERSONAL knowledge — your preferences, conventions, project-specific notes, and action patterns. They persist in a local SQLite graph at ~/.jt-memory/memory.db.
+
+ROUTING — if encyclopedia_* tools are also available:
+  Personal preferences, conventions      → memory_learn / memory_context
+  Project-specific notes (this repo)     → memory_learn
+  Action patterns, command tracking      → memory_track_action
+  Cross-repo service knowledge           → encyclopedia_learn
+  Error patterns affecting multiple svcs → encyclopedia_learn
+  Team decisions, architecture choices   → encyclopedia_learn
+  Service relationships/dependencies     → encyclopedia_relate
+  "How does service X work?"             → encyclopedia_recall
+
+SESSION START: call memory_context to load your preferences and recent project context.
+For cross-repo questions, also call encyclopedia_recall before exploring code.`;
+
+const server = new McpServer(
+  { name: "@houkasaurusrex/jt-mcp-server", version: "0.0.0" },
+  { instructions: INSTRUCTIONS },
+);
 
 // Core tools — always registered
 const coreGroups: [string, (s: typeof server) => void][] = [

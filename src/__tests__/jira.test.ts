@@ -9,6 +9,7 @@ vi.mock("../lib/atlassian-client.js", () => ({
     authHeader: "Basic dGVzdDpmYWtl",
   })),
   resolveAssignee: vi.fn(),
+  resolveCustomFieldId: vi.fn(),
   toAdfParagraph: vi.fn((text: string) => ({
     type: "doc",
     version: 1,
@@ -16,9 +17,10 @@ vi.mock("../lib/atlassian-client.js", () => ({
   })),
 }));
 
-import { atlassianFetch, resolveAssignee } from "../lib/atlassian-client.js";
+import { atlassianFetch, resolveAssignee, resolveCustomFieldId } from "../lib/atlassian-client.js";
 const mockFetch = vi.mocked(atlassianFetch);
 const mockResolveAssignee = vi.mocked(resolveAssignee);
+const mockResolveCustomFieldId = vi.mocked(resolveCustomFieldId);
 
 describe("jira tools", () => {
   beforeEach(() => {
@@ -203,6 +205,111 @@ describe("jira tools", () => {
       });
       expect(body.labels).toEqual(["urgent", "frontend"]);
       expect(body.parent).toEqual({ key: "PROJ-50" });
+    });
+
+    it("should map components to [{name}] objects", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-103" } });
+
+      await handler({
+        project_key: "PROJ",
+        summary: "With component",
+        issue_type: "Task",
+        components: ["Mobile", "API"],
+      });
+
+      const body = (mockFetch.mock.calls[0][1] as any).body.fields;
+      expect(body.components).toEqual([{ name: "Mobile" }, { name: "API" }]);
+    });
+
+    it("should pass custom_fields by explicit ID without lookup", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-104" } });
+      mockResolveCustomFieldId.mockResolvedValueOnce({ id: "customfield_10042" });
+
+      await handler({
+        project_key: "PROJ",
+        summary: "Bug with custom",
+        issue_type: "Bug",
+        custom_fields: { customfield_10042: { value: "iOS" } },
+      });
+
+      expect(mockResolveCustomFieldId).toHaveBeenCalledWith("customfield_10042");
+      const body = (mockFetch.mock.calls[0][1] as any).body.fields;
+      expect(body.customfield_10042).toEqual({ value: "iOS" });
+    });
+
+    it("should resolve custom_fields by display name to field ID", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({ ok: true, status: 201, data: { key: "PROJ-105" } });
+      mockResolveCustomFieldId.mockResolvedValueOnce({ id: "customfield_10042" });
+
+      await handler({
+        project_key: "LRX",
+        summary: "LRX Bug",
+        issue_type: "Bug",
+        custom_fields: { "Affected Platform": { value: "iOS" } },
+      });
+
+      expect(mockResolveCustomFieldId).toHaveBeenCalledWith("Affected Platform");
+      const body = (mockFetch.mock.calls[0][1] as any).body.fields;
+      expect(body.customfield_10042).toEqual({ value: "iOS" });
+    });
+
+    it("should return error without POST when custom field name is ambiguous", async () => {
+      const handler = await getHandler();
+      mockResolveCustomFieldId.mockResolvedValueOnce({
+        error: 'Ambiguous custom field "Severity" matches: customfield_10050, customfield_10077. Use the explicit ID.',
+      });
+
+      const result = await handler({
+        project_key: "LRX",
+        summary: "Bug",
+        issue_type: "Bug",
+        custom_fields: { Severity: { value: "S2" } },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Ambiguous");
+      expect(result.content[0].text).toContain("customfield_10050");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("should surface field errors clearly on 400", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        data: { errors: { customfield_10042: "Affected Platform is required" }, errorMessages: [] },
+      });
+
+      const result = await handler({
+        project_key: "LRX",
+        summary: "Bug",
+        issue_type: "Bug",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("customfield_10042");
+      expect(result.content[0].text).toContain("Affected Platform is required");
+    });
+
+    it("should surface errorMessages on 400 when no field errors", async () => {
+      const handler = await getHandler();
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        data: { errors: {}, errorMessages: ["Issue type is not valid for project"] },
+      });
+
+      const result = await handler({
+        project_key: "PROJ",
+        summary: "Bad type",
+        issue_type: "Unknown",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain("Issue type is not valid");
     });
   });
 

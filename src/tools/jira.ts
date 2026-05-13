@@ -9,7 +9,7 @@ import {
 } from "../types.js";
 import { textResult, errorResult, catchToolError } from "../lib/tool-result.js";
 import { registerToolWithTelemetry } from "../lib/tool-telemetry.js";
-import { atlassianFetch, toAdfParagraph, resolveAssignee } from "../lib/atlassian-client.js";
+import { atlassianFetch, toAdfParagraph, resolveAssignee, resolveCustomFieldId } from "../lib/atlassian-client.js";
 
 // Jira REST API v3 — https://developer.atlassian.com/cloud/jira/platform/rest/v3/
 
@@ -71,10 +71,11 @@ export function register(server: McpServer): void {
     {
       description:
         "Create a new Jira issue via the Atlassian REST API. " +
-        "Supports Task, Bug, Story, Epic, and subtask types.",
+        "Supports Task, Bug, Story, Epic, and subtask types. " +
+        "Use 'components' for project component names and 'custom_fields' for project-required fields (e.g. Affected Platform, Severity).",
       inputSchema: JiraCreateIssueSchema,
     },
-    async ({ project_key, summary, issue_type, description, assignee, labels, parent_key }) => {
+    async ({ project_key, summary, issue_type, description, assignee, labels, parent_key, components, custom_fields }) => {
       try {
         let assigneeId: string | undefined;
         if (assignee) {
@@ -83,24 +84,38 @@ export function register(server: McpServer): void {
           assigneeId = resolved.accountId ?? undefined;
         }
 
-        const issueFields: Record<string, unknown> = {
-          project: { key: project_key },
-          summary,
-          issuetype: { name: issue_type },
-        };
-        if (description) {
-          issueFields.description = toAdfParagraph(description);
+        const issueFields: Record<string, unknown> = {};
+
+        // custom_fields first so explicit typed params always win on any collision
+        if (custom_fields) {
+          for (const [key, value] of Object.entries(custom_fields)) {
+            const r = await resolveCustomFieldId(key);
+            if (r.error) return errorResult(r.error);
+            issueFields[r.id!] = value;
+          }
         }
+
+        issueFields.project = { key: project_key };
+        issueFields.summary = summary;
+        issueFields.issuetype = { name: issue_type };
+
+        if (description) issueFields.description = toAdfParagraph(description);
         if (assigneeId) issueFields.assignee = { accountId: assigneeId };
         if (labels && labels.length > 0) issueFields.labels = labels;
         if (parent_key) issueFields.parent = { key: parent_key };
+        if (components && components.length > 0) issueFields.components = components.map((name: string) => ({ name }));
 
         const res = await atlassianFetch<{ key: string }>("/rest/api/3/issue", {
           method: "POST",
           body: { fields: issueFields },
         });
         if (!res.ok) {
-          return errorResult(`Failed to create issue (${res.status}): ${JSON.stringify(res.data)}`);
+          const d = res.data as { errors?: Record<string, string>; errorMessages?: string[] } | undefined;
+          const parts: string[] = [];
+          if (d?.errors && Object.keys(d.errors).length) parts.push(`Field errors: ${JSON.stringify(d.errors)}`);
+          if (d?.errorMessages?.length) parts.push(`Messages: ${d.errorMessages.join("; ")}`);
+          const detail = parts.length ? parts.join(" | ") : JSON.stringify(res.data);
+          return errorResult(`Failed to create issue (${res.status}): ${detail}`);
         }
         return textResult(JSON.stringify(res.data, null, 2));
       } catch (err) {

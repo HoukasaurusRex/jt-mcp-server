@@ -123,10 +123,10 @@ export function register(server: McpServer): void {
         const db = await getDb();
         const now = new Date().toISOString();
         const insertEntity = db.prepare(
-          "INSERT OR IGNORE INTO entities (name, type, updated_at) VALUES (?, ?, ?)"
+          "INSERT OR IGNORE INTO entities (name, type, scope, updated_at) VALUES (?, ?, ?, ?)"
         );
         const touchEntity = db.prepare(
-          "UPDATE entities SET updated_at = ? WHERE name = ?"
+          "UPDATE entities SET updated_at = ?, scope = COALESCE(?, scope) WHERE name = ?"
         );
         const insertObs = db.prepare(
           "INSERT OR IGNORE INTO observations (entity, content) VALUES (?, ?)"
@@ -135,11 +135,12 @@ export function register(server: McpServer): void {
         let created = 0;
         const addAll = db.transaction(() => {
           for (const e of entities) {
-            const result = insertEntity.run(e.name, e.type, now);
+            const entityScope = e.scope ?? "global";
+            const result = insertEntity.run(e.name, e.type, entityScope, now);
             if (result.changes > 0) {
               created++;
             } else {
-              touchEntity.run(now, e.name);
+              touchEntity.run(now, e.scope ?? null, e.name);
             }
             if (e.observations) {
               for (const obs of e.observations) {
@@ -280,8 +281,9 @@ export function register(server: McpServer): void {
     "memory_query",
     {
       description:
-        "Query the knowledge graph to retrieve entities, their observations, and relations. " +
-        "Call this at the start of every session to load user preferences and project context. " +
+        "Query the knowledge graph for specific entities by name, type, or semantic similarity. " +
+        "Use for targeted lookups during active work (e.g. find entities related to a specific concept). " +
+        "For session-start context loading, use memory_context instead. " +
         "Supports search by name (substring), type filter, relation filter, and BFS traversal up to depth 5.",
       inputSchema: MemoryQuerySchema,
     },
@@ -333,10 +335,17 @@ export function register(server: McpServer): void {
           }
 
         } else if (mode === "graph") {
+          // require name or type to anchor the traversal seed
+          if (!name && !type) {
+            return textResult(JSON.stringify({ entities: [], relations: [] }, null, 2));
+          }
           entityNames = graphTraversal(db, name, type, relation, depth, limit);
 
         } else {
-          // keyword mode (default fallback)
+          // keyword mode: require at least name or type to avoid returning all entities
+          if (!name && !type) {
+            return textResult(JSON.stringify({ entities: [], relations: [] }, null, 2));
+          }
           entityNames = keywordSearch(db, name, type, limit);
         }
 
@@ -503,7 +512,7 @@ export function register(server: McpServer): void {
           }
 
           const insertEntity = db.prepare(
-            "INSERT OR IGNORE INTO entities (name, type) VALUES (?, ?)"
+            "INSERT OR IGNORE INTO entities (name, type, scope) VALUES (?, ?, ?)"
           );
           const insertObs = db.prepare(
             "INSERT OR IGNORE INTO observations (entity, content) VALUES (?, ?)"
@@ -513,7 +522,7 @@ export function register(server: McpServer): void {
           );
 
           for (const e of data.entities) {
-            insertEntity.run(e.name, e.type);
+            insertEntity.run(e.name, e.type, e.scope ?? "global");
             for (const obs of e.observations) {
               insertObs.run(e.name, obs);
             }
@@ -678,12 +687,16 @@ export function register(server: McpServer): void {
           });
         };
 
-        // 1. User preferences and conventions
+        // 1. User preferences and conventions, scoped by project when specified
         if (include_preferences) {
-          const prefs = db.prepare(
-            "SELECT name, type FROM entities WHERE type IN ('preference', 'convention') ORDER BY name"
-          ).all() as unknown as EntityRow[];
-          for (const p of prefs) addEntity(p);
+          const prefRows = project
+            ? (db.prepare(
+                "SELECT name, type FROM entities WHERE type IN ('preference', 'convention') AND (scope = 'global' OR scope = ?) ORDER BY name"
+              ).all(project) as unknown as EntityRow[])
+            : (db.prepare(
+                "SELECT name, type FROM entities WHERE type IN ('preference', 'convention') ORDER BY name"
+              ).all() as unknown as EntityRow[]);
+          for (const p of prefRows) addEntity(p);
         }
 
         // 2. Project-related entities
@@ -729,21 +742,25 @@ export function register(server: McpServer): void {
         "Replaces the 3-call pattern of add_entities + add_observations + add_relations.",
       inputSchema: MemoryLearnSchema,
     },
-    async ({ text, entity, type, source }: MemoryLearnInput) => {
+    async ({ text, entity, type, scope, source }: MemoryLearnInput) => {
       try {
         const db = await getDb();
         const now = new Date().toISOString();
         const entityType = type ?? "knowledge";
+        const entityScope = scope ?? "global";
         const obsSource = source ?? "manual";
 
         let targetEntity: string;
 
         if (entity) {
-          // Use specified entity — create if needed
+          // Use specified entity — create if needed, update scope if provided
           targetEntity = entity;
           db.prepare(
-            "INSERT OR IGNORE INTO entities (name, type, updated_at) VALUES (?, ?, ?)"
-          ).run(targetEntity, entityType, now);
+            "INSERT OR IGNORE INTO entities (name, type, scope, updated_at) VALUES (?, ?, ?, ?)"
+          ).run(targetEntity, entityType, entityScope, now);
+          if (scope) {
+            db.prepare("UPDATE entities SET scope = ? WHERE name = ?").run(entityScope, targetEntity);
+          }
         } else {
           // Try to find an existing entity mentioned in the text
           const allEntities = db.prepare("SELECT name FROM entities").all() as { name: string }[];
@@ -753,12 +770,15 @@ export function register(server: McpServer): void {
 
           if (matched) {
             targetEntity = matched.name;
+            if (scope) {
+              db.prepare("UPDATE entities SET scope = ? WHERE name = ?").run(entityScope, targetEntity);
+            }
           } else {
             // Create a new entity from the first meaningful phrase
             targetEntity = text.length > 60 ? text.slice(0, 60).replace(/\s+\S*$/, "") : text;
             db.prepare(
-              "INSERT OR IGNORE INTO entities (name, type, updated_at) VALUES (?, ?, ?)"
-            ).run(targetEntity, entityType, now);
+              "INSERT OR IGNORE INTO entities (name, type, scope, updated_at) VALUES (?, ?, ?, ?)"
+            ).run(targetEntity, entityType, entityScope, now);
           }
         }
 

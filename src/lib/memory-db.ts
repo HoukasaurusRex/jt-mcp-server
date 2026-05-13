@@ -94,6 +94,9 @@ const MIGRATIONS: string[] = [
   "ALTER TABLE tracked_actions ADD COLUMN outcome TEXT",
   "ALTER TABLE tracked_actions ADD COLUMN duration_ms INTEGER",
   "ALTER TABLE tracked_actions ADD COLUMN session_id TEXT",
+  // entities: scope for context filtering
+  "ALTER TABLE entities ADD COLUMN scope TEXT DEFAULT 'global'",
+  "CREATE INDEX IF NOT EXISTS idx_entities_scope ON entities(scope)",
 ];
 
 function runMigrations(db: CompatDatabase): void {
@@ -272,6 +275,7 @@ export interface TrackedActionRow {
 export interface ExportEntity {
   name: string;
   type: string;
+  scope?: string | null;
   observations: string[];
   updated_at?: string | null;
   access_count?: number;
@@ -296,8 +300,8 @@ export interface ExportData {
 
 export function exportGraph(db: CompatDatabase): ExportData {
   const entities = db
-    .prepare("SELECT name, type, updated_at, access_count FROM entities ORDER BY name")
-    .all() as { name: string; type: string; updated_at: string | null; access_count: number }[];
+    .prepare("SELECT name, type, scope, updated_at, access_count FROM entities ORDER BY name")
+    .all() as { name: string; type: string; scope: string | null; updated_at: string | null; access_count: number }[];
 
   const observations = db
     .prepare("SELECT entity, content FROM observations ORDER BY entity, id")
@@ -324,6 +328,7 @@ export function exportGraph(db: CompatDatabase): ExportData {
     entities: entities.map((e) => ({
       name: e.name as string,
       type: e.type as string,
+      ...(e.scope && e.scope !== "global" ? { scope: e.scope } : {}),
       observations: obsByEntity.get(e.name as string) ?? [],
       ...(e.updated_at ? { updated_at: e.updated_at } : {}),
       ...(e.access_count ? { access_count: e.access_count } : {}),

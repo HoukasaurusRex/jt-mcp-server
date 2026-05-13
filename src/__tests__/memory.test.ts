@@ -23,7 +23,8 @@ CREATE TABLE IF NOT EXISTS entities (
   created TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT,
   access_count INTEGER DEFAULT 0,
-  last_accessed TEXT
+  last_accessed TEXT,
+  scope TEXT DEFAULT 'global'
 );
 CREATE TABLE IF NOT EXISTS observations (
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -417,9 +418,33 @@ describe("memory", () => {
       await seedData(mockServer);
       const query = getHandler(mockServer, "memory_query");
 
-      const result = await query({ depth: 1, limit: 1 });
+      const result = await query({ name: "Type", depth: 1, limit: 1 });
       const data = JSON.parse(result.content[0].text);
       expect(data.entities.length).toBeLessThanOrEqual(1);
+    });
+
+    it("should return empty result when called with no filters (keyword mode)", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      await seedData(mockServer);
+      const query = getHandler(mockServer, "memory_query");
+
+      const result = await query({ mode: "keyword", depth: 1, limit: 20 });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.entities).toHaveLength(0);
+    });
+
+    it("should return empty result when called with no filters (graph mode)", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      await seedData(mockServer);
+      const query = getHandler(mockServer, "memory_query");
+
+      const result = await query({ mode: "graph", depth: 1, limit: 20 });
+      const data = JSON.parse(result.content[0].text);
+      expect(data.entities).toHaveLength(0);
     });
 
     it("should return empty result for no matches", async () => {
@@ -431,6 +456,114 @@ describe("memory", () => {
       const result = await query({ name: "nonexistent", depth: 1, limit: 20 });
       const data = JSON.parse(result.content[0].text);
       expect(data.entities).toHaveLength(0);
+    });
+  });
+
+  describe("entity scope", () => {
+    it("memory_add_entities stores scope and defaults to global", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const addEntities = getHandler(mockServer, "memory_add_entities");
+
+      await addEntities({
+        entities: [
+          { name: "global-pref", type: "preference", scope: "global" },
+          { name: "writing-pref", type: "preference", scope: "writing" },
+          { name: "no-scope-pref", type: "preference" },
+        ],
+      });
+
+      const rows = testDb.prepare("SELECT name, scope FROM entities ORDER BY name").all() as { name: string; scope: string }[];
+      const byName = Object.fromEntries(rows.map((r) => [r.name, r.scope]));
+      expect(byName["global-pref"]).toBe("global");
+      expect(byName["writing-pref"]).toBe("writing");
+      expect(byName["no-scope-pref"]).toBe("global");
+    });
+
+    it("memory_learn updates scope on existing entity when scope provided", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const learn = getHandler(mockServer, "memory_learn");
+
+      await learn({ text: "jt-writing-voice is a writing preference", entity: "jt-writing-voice", type: "preference", scope: "global" });
+      let row = testDb.prepare("SELECT scope FROM entities WHERE name = 'jt-writing-voice'").get() as { scope: string };
+      expect(row.scope).toBe("global");
+
+      await learn({ text: "updated", entity: "jt-writing-voice", scope: "writing" });
+      row = testDb.prepare("SELECT scope FROM entities WHERE name = 'jt-writing-voice'").get() as { scope: string };
+      expect(row.scope).toBe("writing");
+    });
+
+    it("memory_context with project filters preferences by scope", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const addEntities = getHandler(mockServer, "memory_add_entities");
+      const context = getHandler(mockServer, "memory_context");
+
+      await addEntities({
+        entities: [
+          { name: "jt-coding-preferences", type: "preference", scope: "global" },
+          { name: "jt-writing-voice", type: "preference", scope: "writing" },
+          { name: "astro-patterns", type: "convention", scope: "astro" },
+        ],
+      });
+
+      const result = await context({ project: "typey", include_preferences: true, include_recent: false, recent_days: 7, max_entities: 50 });
+      const data = JSON.parse(result.content[0].text);
+      const names = data.entities.map((e: { name: string }) => e.name);
+
+      expect(names).toContain("jt-coding-preferences");
+      expect(names).not.toContain("jt-writing-voice");
+      expect(names).not.toContain("astro-patterns");
+    });
+
+    it("memory_context without project loads all preferences", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const addEntities = getHandler(mockServer, "memory_add_entities");
+      const context = getHandler(mockServer, "memory_context");
+
+      await addEntities({
+        entities: [
+          { name: "jt-coding-preferences", type: "preference", scope: "global" },
+          { name: "jt-writing-voice", type: "preference", scope: "writing" },
+        ],
+      });
+
+      const result = await context({ include_preferences: true, include_recent: false, recent_days: 7, max_entities: 50 });
+      const data = JSON.parse(result.content[0].text);
+      const names = data.entities.map((e: { name: string }) => e.name);
+
+      expect(names).toContain("jt-coding-preferences");
+      expect(names).toContain("jt-writing-voice");
+    });
+
+    it("import preserves scope from export data", async () => {
+      const { register } = await import("../tools/memory.js");
+      const mockServer = { registerTool: vi.fn() };
+      register(mockServer as any);
+      const memImport = getHandler(mockServer, "memory_import");
+
+      // Simulate importing data that includes scope (as produced by exportGraph)
+      await memImport({
+        data: {
+          entities: [
+            { name: "scoped-entity", type: "preference", scope: "writing", observations: ["writes articles"] },
+            { name: "global-entity", type: "preference", observations: ["codes in Go"] }, // no scope = defaults to global
+          ],
+          relations: [],
+        },
+        merge: true,
+      });
+
+      const scoped = testDb.prepare("SELECT scope FROM entities WHERE name = 'scoped-entity'").get() as { scope: string };
+      const global = testDb.prepare("SELECT scope FROM entities WHERE name = 'global-entity'").get() as { scope: string };
+      expect(scoped.scope).toBe("writing");
+      expect(global.scope).toBe("global");
     });
   });
 

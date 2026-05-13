@@ -335,6 +335,18 @@ export const JiraCreateIssueSchema = z.object({
     .string()
     .optional()
     .describe("Parent issue key for subtasks or stories under an epic"),
+  components: z
+    .array(z.string())
+    .optional()
+    .describe("Component names to assign (project-scoped, must match exactly, e.g. ['Mobile', 'API'])"),
+  custom_fields: z
+    .record(z.string(), z.unknown())
+    .optional()
+    .describe(
+      "Custom field values keyed by field ID ('customfield_10042') or display name. " +
+      "Value shapes: select/radio → {value:'iOS'}, multi-select → [{value:'iOS'}], text → string, number → number, rich-text → ADF doc. " +
+      "LRX Bug example: {'Affected Platform':{value:'iOS'},'Severity':{value:'S2'},'Were you able to reproduce it?':{value:'Yes'}}"
+    ),
 });
 export type JiraCreateIssueInput = z.infer<typeof JiraCreateIssueSchema>;
 
@@ -494,6 +506,12 @@ const MemoryEntitySchema = z.object({
     .describe(
       "Entity type (e.g. person, tool, language, framework, preference, convention, project, workflow)"
     ),
+  scope: z
+    .string()
+    .optional()
+    .describe(
+      "Visibility scope: 'global' (always loaded, default) or a project name (e.g. 'typey', 'writing') to load only in that context"
+    ),
   observations: z
     .array(z.string())
     .optional()
@@ -615,6 +633,7 @@ export const MemoryImportSchema = z.object({
         z.object({
           name: z.string(),
           type: z.string(),
+          scope: z.string().optional(),
           observations: z.array(z.string()),
         })
       ),
@@ -750,6 +769,12 @@ export const MemoryLearnSchema = z.object({
     .string()
     .optional()
     .describe("Entity type — if omitted, defaults to 'knowledge'"),
+  scope: z
+    .string()
+    .optional()
+    .describe(
+      "Visibility scope: 'global' (always loaded, default) or a project name (e.g. 'typey', 'writing') to load only in that context"
+    ),
   source: z
     .string()
     .optional()
